@@ -1068,7 +1068,7 @@ async function recallForAll() {
         uid: currentUser.uid
       }, { merge: true });
     } catch (e2) {
-      alert("Rules Firebase đang chặn thu hồi. Dán bộ rules mới rồi bấm Publish.");
+      alert("Thu hồi bị chặn trên project appnhantincuavua36\n" + ((e2 && e2.message) || e1.message || ""));
     }
   }
 }
