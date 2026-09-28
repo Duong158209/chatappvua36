@@ -325,23 +325,37 @@
   body.dark .panel { background: #111114; }
   body.dark .panel-header { background: #111114; border-bottom-color: #2c2c2e; }
   body.dark .contact-card:hover { background: #1c1c1e; }
-  body.dark .contact-info .cname { color: #f2f2f7; }
-  body.dark .contact-info .cemail { color: #8e8e93; }
-  body.dark .empty-note { color: #8e8e93; }
+  body.dark .contact-info .cname, body.dark .cinfo .cname { color: #f5f5f7; }
+  body.dark .contact-info .cemail, body.dark .cinfo .cemail { color: #d1d1d6; }
+  body.dark .empty-note { color: #d1d1d6; }
   body.dark #chat-form, body.dark #dm-form { background: #111114; border-top-color: #2c2c2e; }
   body.dark #chat-form input, body.dark #dm-form input, body.dark .friend-search, body.dark .mini-input {
-    background: #1c1c1e; color: #f2f2f7; border-color: #3a3a3c;
+    background: #1c1c1e; color: #f5f5f7; border-color: #3a3a3c;
   }
-  body.dark .friend-search { background: #1c1c1e; }
-  body.dark .modal-box { background: #1c1c1e; color: #f2f2f7; }
-  body.dark .modal-box h3 { color: #f2f2f7; }
-  body.dark .toggle-row { border-bottom-color: #2c2c2e; }
-  body.dark .toggle-row .t-title { color: #f2f2f7; }
-  body.dark #settings-btn { background: transparent; color: #f2f2f7; }
+  body.dark .friend-search { background: #1c1c1e; color: #f5f5f7; }
+  body.dark .modal-box { background: #2c2c2e; color: #f5f5f7; }
+  body.dark .modal-box h3 { color: #fff; }
+  body.dark .modal-box p { color: #d1d1d6; }
+  body.dark .toggle-row { border-bottom-color: #3a3a3c; }
+  body.dark .toggle-row .t-title { color: #f5f5f7; }
+  body.dark .toggle-row .t-desc { color: #d1d1d6; }
+  body.dark #settings-btn { background: transparent; color: #f5f5f7; }
   body.dark .admin-row { background: #1c1c1e; }
-  body.dark .admin-row .a-name { color: #f2f2f7; }
+  body.dark .admin-row .a-name { color: #f5f5f7; }
+  body.dark .admin-row .a-email, body.dark .admin-row .a-meta { color: #d1d1d6; }
   body.dark .code-box { background: #1c1c1e; }
-  body.dark .section-title { color: #8e8e93; }
+  body.dark .code-box .cb-label { color: #d1d1d6; }
+  body.dark .code-box .cb-code { color: #d4b3ff; }
+  body.dark .section-title { color: #d1d1d6; }
+  body.dark .profile-field { border-bottom-color: #3a3a3c; }
+  body.dark .profile-field .pf-label { color: #d1d1d6; }
+  body.dark .profile-field .pf-value { color: #ffffff; }
+  body.dark .modal-btn-soft, body.dark .modal-btn-close, body.dark #close-profile-btn {
+    background: #f2f2f7; color: #111;
+  }
+  body.dark .nav-tab .tab-label { color: #e5e5ea; }
+  body.dark .chev { color: #aeaeb2; }
+  body.dark .sender-label, body.dark .msg-meta { color: rgba(255,255,255,.85); }
 </style>
 </head>
 <body>
@@ -618,6 +632,7 @@
       <span><div class="t-title">Giao diện tối</div><div class="t-desc">Nền tối cho toàn app</div></span>
       <input type="checkbox" id="set-dark">
     </label>
+    <button class="modal-btn-soft" id="set-notify" style="width:100%;margin-top:10px;">🔔 Bật thông báo tin nhắn</button>
     <button class="modal-btn-close" id="settings-close">Đóng</button>
   </div>
 </div>
@@ -826,6 +841,7 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   settingsModal.classList.add("show");
 });
 document.getElementById("set-dark").addEventListener("change", (e) => applyTheme(e.target.checked));
+document.getElementById("set-notify").addEventListener("click", requestNotifyPerm);
 document.getElementById("friend-search").addEventListener("input", paintFriends);
 document.getElementById("settings-close").addEventListener("click", () => settingsModal.classList.remove("show"));
 settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) settingsModal.classList.remove("show"); });
@@ -1018,6 +1034,12 @@ auth.onAuthStateChanged(async (user) => {
 
     listenOnlineUsers();
     listenMessages();
+    listenGroups();
+    loadFriends();
+    setTimeout(() => { notifyReady = true; }, 2000);
+    if (window.Notification && Notification.permission === "default") {
+      setTimeout(requestNotifyPerm, 1200);
+    }
 
     setInterval(() => {
       db.collection("users").doc(user.uid).set({
@@ -1109,6 +1131,59 @@ function markWorldRead() {
   if (el) el.style.display = "none";
 }
 
+const seenNotify = {};
+let notifyReady = false;
+let audioUnlocked = false;
+window.NOTIFY_AUDIO_SRC = "";
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  try { playBeep(0.01); } catch (e) {}
+}
+document.addEventListener("click", unlockAudio, { once: true });
+document.addEventListener("touchstart", unlockAudio, { once: true });
+function playBeep(sec) {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  const ctx = new AC();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = "sine"; o.frequency.value = 880;
+  g.gain.value = 0.09;
+  o.connect(g); g.connect(ctx.destination);
+  o.start();
+  setTimeout(() => { try { o.stop(); ctx.close(); } catch (e) {} }, (sec || 0.18) * 1000);
+}
+function playNotifySound() {
+  if (window.NOTIFY_AUDIO_SRC) {
+    const a = new Audio(window.NOTIFY_AUDIO_SRC);
+    a.play().catch(() => playBeep());
+    return;
+  }
+  playBeep();
+}
+function viewingChat(chatKey) {
+  if (!document.hasFocus()) return false;
+  if (chatKey === "public") return document.getElementById("panel-chat").classList.contains("active");
+  return !!(currentChat && currentChat.id === chatKey && document.getElementById("panel-dm").classList.contains("active"));
+}
+function notifyIncoming(id, m, title, chatKey) {
+  if (!id || seenNotify[id]) return;
+  seenNotify[id] = 1;
+  if (!notifyReady || !currentUser || !m) return;
+  if (m.uid === currentUser.uid || m.recalled || m.type === "recalled") return;
+  if (viewingChat(chatKey)) return;
+  playNotifySound();
+  const body = m.type === "image" ? "Đã gửi một ảnh" : m.type === "voice" ? "Đã gửi tin thoại" : m.type === "file" ? "Đã gửi một tệp" : (m.text || "Tin nhắn mới");
+  if (window.Notification && Notification.permission === "granted") {
+    try { new Notification(title || "Raumania", { body: body, tag: String(id) }); } catch (e) {}
+  }
+}
+function requestNotifyPerm() {
+  if (!window.Notification) return alert("Trình duyệt không hỗ trợ thông báo.");
+  Notification.requestPermission();
+}
+
 function listenMessages() {
   unsubscribeMessages = db.collection("messages")
     .orderBy("createdAt", "asc")
@@ -1116,6 +1191,9 @@ function listenMessages() {
     .onSnapshot((snap) => {
       lastPublicSnap = snap;
       renderPublic(snap);
+      snap.docChanges().forEach((ch) => {
+        if (ch.type === "added") notifyIncoming(ch.doc.id, ch.doc.data(), "Kênh thế giới", "public");
+      });
     });
 }
 
@@ -1437,6 +1515,7 @@ async function loadFriends() {
       ? (await Promise.all(blockedIds.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists)
       : [];
     paintFriends();
+    listenFriendInbox();
   } catch (e) {
     listEl.innerHTML = '<div class="empty-note">Không tải được danh sách bạn bè, thử lại sau.</div>';
   }
@@ -1787,6 +1866,9 @@ function openDM(friend) {
     .orderBy("createdAt", "asc")
     .limitToLast(200)
     .onSnapshot((snap) => {
+      snap.docChanges().forEach((ch) => {
+        if (ch.type === "added") notifyIncoming(ch.doc.id, ch.doc.data(), friend.name, dmChatId(friend.uid));
+      });
       const nearBottom = dmEl.scrollHeight - dmEl.scrollTop - dmEl.clientHeight < 120;
       dmEl.innerHTML = "";
       if (snap.empty) {
@@ -2105,6 +2187,23 @@ document.getElementById("nick-private").addEventListener("click", () => saveNick
 document.getElementById("nick-clear").addEventListener("click", () => saveNick("clear"));
 
 /* ---------------- NHÓM ---------------- */
+const groupInbox = {};
+let friendInbox = [];
+function listenFriendInbox() {
+  friendInbox.forEach((u) => { try { u(); } catch (e) {} });
+  friendInbox = [];
+  if (!currentUser) return;
+  cachedFriendDocs.forEach((d) => {
+    const cid = dmChatId(d.id);
+    const name = (d.data() && d.data().name) || "Bạn";
+    const u = db.collection("chats").doc(cid).collection("messages").orderBy("createdAt", "desc").limit(1)
+      .onSnapshot((s) => s.docChanges().forEach((ch) => {
+        if (ch.type === "added") notifyIncoming(ch.doc.id, ch.doc.data(), name, cid);
+      }));
+    friendInbox.push(u);
+  });
+}
+
 function listenGroups() {
   if (unsubscribeGroups) return;
   const listEl = document.getElementById("groups-list");
@@ -2127,6 +2226,12 @@ function listenGroups() {
       });
       card.addEventListener("click", () => openGroup(d.id, g));
       listEl.appendChild(card);
+      if (!groupInbox[d.id]) {
+        groupInbox[d.id] = db.collection("groups").doc(d.id).collection("messages").orderBy("createdAt", "desc").limit(1)
+          .onSnapshot((s) => s.docChanges().forEach((ch) => {
+            if (ch.type === "added") notifyIncoming(ch.doc.id, ch.doc.data(), g.name || "Nhóm", d.id);
+          }));
+      }
     });
   }, () => { listEl.innerHTML = '<div class="empty-note">Không tải được danh sách nhóm, kiểm tra lại rules nhé.</div>'; });
 }
@@ -2164,6 +2269,9 @@ function openGroup(id, g) {
   }, () => {});
   const u2 = ref.collection("messages").orderBy("createdAt", "asc").limitToLast(200).onSnapshot((snap) => {
     lastChatSnap = snap; renderChatSnap(snap);
+    snap.docChanges().forEach((ch) => {
+      if (ch.type === "added") notifyIncoming(ch.doc.id, ch.doc.data(), g.name || "Nhóm", id);
+    });
   }, () => { dmEl.innerHTML = '<div class="empty-note">Không tải được tin nhắn, kiểm tra lại quyền (rules) nhé.</div>'; });
   unsubscribeDM = () => { u1(); u2(); };
 }
@@ -2316,10 +2424,9 @@ function setupComposer(formId, inputId, where) {
   const form = document.getElementById(formId), input = document.getElementById(inputId);
   const sendBtn = form.querySelector('button[type="submit"]');
   const mk = (label, title, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "tool-btn " + (cls || ""); b.textContent = label; b.title = title; form.insertBefore(b, input); return b; };
-  const emojiBtn = mk("😊", "Icon", "emoji-btn"), imgBtn = mk("🖼️", "Gửi hình ảnh"), fileBtn = mk("📎", "Gửi tệp"), micBtn = mk("🎤", "Gửi tin thoại");
-  const imgIn = document.createElement("input"); imgIn.type = "file"; imgIn.accept = "image/*"; imgIn.style.display = "none";
-  const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.style.display = "none";
-  form.appendChild(imgIn); form.appendChild(fileIn);
+  const emojiBtn = mk("😊", "Icon", "emoji-btn"), fileBtn = mk("📎", "Gửi ảnh hoặc tệp"), micBtn = mk("🎤", "Gửi tin thoại");
+  const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.accept = "image/*,*/*"; fileIn.style.display = "none";
+  form.appendChild(fileIn);
 
   emojiBtn.addEventListener("click", () => {
     emojiTarget = input;
@@ -2329,23 +2436,21 @@ function setupComposer(formId, inputId, where) {
     emojiPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + "px";
     emojiPop.style.top = Math.max(8, r.top - emojiPop.offsetHeight - 8) + "px";
   });
-  imgBtn.addEventListener("click", () => imgIn.click());
   fileBtn.addEventListener("click", () => fileIn.click());
   bindVoiceBtn(micBtn, where);
 
-  imgIn.addEventListener("change", async () => {
-    const f = imgIn.files[0]; imgIn.value = "";
-    if (!f) return;
-    try {
-      let d = await imageToDataURLMax(f, 1000);
-      if (d.length > MAX_DATA_LEN) d = await imageToDataURLMax(f, 640);
-      if (d.length > MAX_DATA_LEN) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
-      await sendExtra(where, { type: "image", image: d });
-    } catch (e) { alert("Không gửi được ảnh, thử lại nhé."); }
-  });
   fileIn.addEventListener("change", async () => {
     const f = fileIn.files[0]; fileIn.value = "";
     if (!f) return;
+    if ((f.type || "").indexOf("image/") === 0) {
+      try {
+        let d = await imageToDataURLMax(f, 1000);
+        if (d.length > MAX_DATA_LEN) d = await imageToDataURLMax(f, 640);
+        if (d.length > MAX_DATA_LEN) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
+        await sendExtra(where, { type: "image", image: d });
+      } catch (e) { alert("Không gửi được ảnh, thử lại nhé."); }
+      return;
+    }
     if (f.size > MAX_FILE_BYTES) return uploadBigFile(f, where);
     try {
       const d = await readAsDataURL(f);
