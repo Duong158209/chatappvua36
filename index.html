@@ -418,10 +418,10 @@
         <div class="tab-icon">🌐</div><span class="tab-label">Kênh thế giới</span><span class="nav-unread" id="world-unread" style="display:none;">0</span>
       </div>
       <div class="nav-tab" data-tab="friends">
-        <div class="tab-icon">👥</div><span class="tab-label">Bạn bè</span>
+        <div class="tab-icon">👥</div><span class="tab-label">Bạn bè</span><span class="nav-unread" id="friends-unread" style="display:none;">0</span>
       </div>
       <div class="nav-tab" data-tab="groups">
-        <div class="tab-icon">🫂</div><span class="tab-label">Nhóm</span>
+        <div class="tab-icon">🫂</div><span class="tab-label">Nhóm</span><span class="nav-unread" id="groups-unread" style="display:none;">0</span>
       </div>
       <div class="nav-tab" data-tab="contacts">
         <div class="tab-icon">🔍</div><span class="tab-label">Kết bạn</span>
@@ -1206,6 +1206,8 @@ function notifyIncoming(id, m, title, chatKey) {
   const body = m.type === "image" ? "Đã gửi một ảnh" : m.type === "voice" ? "Đã gửi tin thoại" : m.type === "file" ? "Đã gửi một tệp" : (m.text || "Tin nhắn mới");
   playNotifySound();
   showAppToast(title || "Raumania", body);
+  refreshFriendsTabBadge();
+  refreshGroupsTabBadge();
   if (window.Notification && Notification.permission === "granted") {
     try { new Notification(title || "Raumania", { body: body, tag: String(id) }); } catch (e) {}
   }
@@ -1555,6 +1557,8 @@ async function loadFriends() {
       : [];
     paintFriends();
     listenFriendInbox();
+    refreshFriendsTabBadge();
+    refreshGroupsTabBadge();
   } catch (e) {
     listEl.innerHTML = '<div class="empty-note">Không tải được danh sách bạn bè, thử lại sau.</div>';
   }
@@ -1845,7 +1849,10 @@ function markChatRead() {
     /* vẫn đánh dấu đã đọc để xóa badge, không hiện "Đã xem" cho người kia */
   }
   const o = {}; o[currentUser.uid] = firebase.firestore.FieldValue.serverTimestamp();
-  ref.set({ reads: o }, { merge: true }).catch(function () {});
+  ref.set({ reads: o }, { merge: true }).then(() => {
+    refreshFriendsTabBadge();
+    refreshGroupsTabBadge();
+  }).catch(function () {});
 }
 function fmtUnread(n) {
   if (!n || n < 1) return "";
@@ -1856,6 +1863,37 @@ function putBadge(wrap, n) {
   if (n < 1) { if (b) b.remove(); return; }
   if (!b) { b = document.createElement("span"); b.className = "unread-badge"; wrap.appendChild(b); }
   b.textContent = fmtUnread(n);
+}
+function setNavBadge(id, n) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!n) { el.style.display = "none"; return; }
+  el.style.display = "inline-block";
+  el.textContent = fmtUnread(n);
+}
+async function refreshFriendsTabBadge() {
+  if (!currentUser) return setNavBadge("friends-unread", 0);
+  let total = 0;
+  for (let i = 0; i < cachedFriendDocs.length; i++) {
+    const id = cachedFriendDocs[i].id;
+    const cid = dmChatId(id);
+    const ms = await lastReadMsOf(db.collection("chats").doc(cid));
+    total += await countUnread(db.collection("chats").doc(cid).collection("messages"), ms);
+  }
+  setNavBadge("friends-unread", total);
+}
+async function refreshGroupsTabBadge() {
+  if (!currentUser) return setNavBadge("groups-unread", 0);
+  try {
+    const snap = await db.collection("groups").where("members", "array-contains", currentUser.uid).get();
+    let total = 0;
+    const docs = snap.docs;
+    for (let i = 0; i < docs.length; i++) {
+      const ms = await lastReadMsOf(db.collection("groups").doc(docs[i].id));
+      total += await countUnread(db.collection("groups").doc(docs[i].id).collection("messages"), ms);
+    }
+    setNavBadge("groups-unread", total);
+  } catch (e) {}
 }
 async function countUnread(msgCol, lastReadMs) {
   try {
