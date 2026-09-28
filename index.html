@@ -40,8 +40,13 @@
   .sidebar-header { padding: 16px; border-bottom: 1px solid #eee; }
   .sidebar-header h2 { font-size: 18px; color: #050505; }
 
-  .me-row { display: flex; align-items: center; gap: 8px; padding: 14px 12px 14px 16px; border-bottom: 1px solid #f0f0f0; }
-  #settings-btn { border: none; background: #f0f0f2; width: 36px; height: 36px; border-radius: 10px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
+  .me-row { display: flex; align-items: center; gap: 14px; padding: 14px 12px 14px 16px; border-bottom: 1px solid #f0f0f0; }
+  #profile-trigger { flex: 1; min-width: 0; }
+  #settings-btn { border: none; background: transparent; width: 36px; height: 36px; border-radius: 10px; font-size: 18px; cursor: pointer; flex-shrink: 0; margin-left: 4px; opacity: .85; }
+  .friend-search {
+    flex: 1; border: none; background: #f0f2f5; border-radius: 18px;
+    padding: 9px 14px; font-size: 14px; outline: none;
+  }
   .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; text-align: left; border-bottom: 1px solid #f0f0f0; }
   .toggle-row .t-title { font-size: 14px; font-weight: 600; color: #222; }
   .toggle-row .t-desc { font-size: 12px; color: #888; margin-top: 2px; }
@@ -198,8 +203,20 @@
   #chat-info .ci-top button { border: none; background: none; color: #fff; font-size: 24px; cursor: pointer; }
   #chat-info .ci-top .ci-title { flex: 1; text-align: center; font-weight: 700; margin-right: 28px; }
   #chat-info .ci-hero { text-align: center; padding: 18px 16px 8px; }
-  #chat-info .ci-hero .avatar { width: 88px; height: 88px; margin: 0 auto 10px; font-size: 32px; }
+  #chat-info .ci-hero .avatar { width: 88px; height: 88px; margin: 0 auto; font-size: 32px; }
   #chat-info .ci-hero h3 { font-size: 20px; }
+  .ci-av-wrap { position: relative; width: 88px; margin: 0 auto 10px; }
+  .ci-edit {
+    position: absolute; right: -4px; bottom: -4px;
+    width: 28px; height: 28px; border-radius: 50%; border: none;
+    background: #3a3a3c; color: #fff; font-size: 13px; cursor: pointer;
+  }
+  .ci-name-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .ci-name-row .ci-edit { position: static; }
+  .ci-name-input {
+    margin: 8px auto 0; width: 80%; max-width: 260px; padding: 8px 10px;
+    border-radius: 10px; border: 1px solid #3a3a3c; background: #1c1c1e; color: #fff; text-align: center;
+  }
   #chat-info .ci-card { margin: 16px 12px; background: #1c1c1e; border-radius: 14px; overflow: hidden; }
   #chat-info .ci-row {
     display: flex; align-items: center; gap: 12px; width: 100%;
@@ -297,6 +314,34 @@
     .nav-tab .tab-icon { font-size: 20px; }
     .nav-tab .tab-label { white-space: normal; line-height: 1.2; }
   }
+
+  body.dark { background: #0e0e10; }
+  body.dark .sidebar { background: #111114; border-right-color: #2c2c2e; }
+  body.dark .sidebar-header { border-bottom-color: #2c2c2e; }
+  body.dark .sidebar-header h2, body.dark .me-text .name, body.dark .nav-tab, body.dark .panel-header .title { color: #f2f2f7; }
+  body.dark .me-row, body.dark .sidebar-header { border-bottom-color: #2c2c2e; }
+  body.dark .me-text .email { color: #8e8e93; }
+  body.dark .nav-tab:hover, body.dark .nav-tab.active { background: #2c2240; }
+  body.dark .panel { background: #111114; }
+  body.dark .panel-header { background: #111114; border-bottom-color: #2c2c2e; }
+  body.dark .contact-card:hover { background: #1c1c1e; }
+  body.dark .contact-info .cname { color: #f2f2f7; }
+  body.dark .contact-info .cemail { color: #8e8e93; }
+  body.dark .empty-note { color: #8e8e93; }
+  body.dark #chat-form, body.dark #dm-form { background: #111114; border-top-color: #2c2c2e; }
+  body.dark #chat-form input, body.dark #dm-form input, body.dark .friend-search, body.dark .mini-input {
+    background: #1c1c1e; color: #f2f2f7; border-color: #3a3a3c;
+  }
+  body.dark .friend-search { background: #1c1c1e; }
+  body.dark .modal-box { background: #1c1c1e; color: #f2f2f7; }
+  body.dark .modal-box h3 { color: #f2f2f7; }
+  body.dark .toggle-row { border-bottom-color: #2c2c2e; }
+  body.dark .toggle-row .t-title { color: #f2f2f7; }
+  body.dark #settings-btn { background: transparent; color: #f2f2f7; }
+  body.dark .admin-row { background: #1c1c1e; }
+  body.dark .admin-row .a-name { color: #f2f2f7; }
+  body.dark .code-box { background: #1c1c1e; }
+  body.dark .section-title { color: #8e8e93; }
 </style>
 </head>
 <body>
@@ -382,7 +427,10 @@
       <div class="panel-header">
         <button class="back-btn" id="dm-back" title="Quay lại">←</button>
         <div class="avatar" id="dm-avatar">?</div>
-        <div><div class="title" id="dm-name">—</div></div>
+        <div style="min-width:0;flex:1;">
+          <div class="title" id="dm-name">—</div>
+          <div class="status" id="dm-status"></div>
+        </div>
         <button class="back-btn" id="dm-group-btn" title="Cài đặt nhóm" style="display:none;">⚙️</button>
         <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh" style="display:none;">✏️</button>
         <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat" style="display:none;">🎨</button>
@@ -402,7 +450,9 @@
 
     <!-- Friends panel -->
     <div class="panel" id="panel-friends">
-      <div class="panel-header"><div class="title">Bạn bè</div></div>
+      <div class="panel-header">
+        <input type="search" id="friend-search" class="friend-search" placeholder="🔍 Tìm bạn bè" autocomplete="off">
+      </div>
       <div id="friends-list" style="flex:1; overflow-y:auto; padding:12px;"></div>
     </div>
 
@@ -564,6 +614,10 @@
       <span><div class="t-title">Hiện đã xem</div><div class="t-desc">Báo đã xem tin và thấy khi người kia xem</div></span>
       <input type="checkbox" id="set-seen" checked>
     </label>
+    <label class="toggle-row">
+      <span><div class="t-title">Giao diện tối</div><div class="t-desc">Nền tối cho toàn app</div></span>
+      <input type="checkbox" id="set-dark">
+    </label>
     <button class="modal-btn-close" id="settings-close">Đóng</button>
   </div>
 </div>
@@ -574,11 +628,17 @@
     <div class="ci-title" id="ci-top-title">Chi tiết</div>
   </div>
   <div class="ci-hero">
-    <div class="avatar" id="ci-avatar">?</div>
-    <h3 id="ci-name">—</h3>
+    <div class="ci-av-wrap">
+      <div class="avatar" id="ci-avatar">?</div>
+      <button type="button" class="ci-edit" id="ci-edit-photo" style="display:none;">✏️</button>
+    </div>
+    <div class="ci-name-row">
+      <h3 id="ci-name">—</h3>
+      <button type="button" class="ci-edit" id="ci-edit-name" style="display:none;">✏️</button>
+    </div>
+    <input id="ci-name-input" class="ci-name-input" maxlength="40" style="display:none;" placeholder="Tên nhóm">
   </div>
   <div class="ci-card">
-    <button type="button" class="ci-row" id="ci-group"><span class="ci-ico">⚙️</span> Cài đặt nhóm</button>
     <button type="button" class="ci-row" id="ci-nick"><span class="ci-ico">Aa</span> Biệt danh</button>
     <button type="button" class="ci-row" id="ci-theme"><span class="ci-ico">🎨</span> Đổi ảnh nền</button>
   </div>
@@ -609,6 +669,31 @@ function visibleOnline(d) {
   if (!d) return false;
   if (iAmAdmin()) return isUserOnline(d);
   return isUserOnline(d) && !d.hideActivity;
+}
+function activityLabel(d) {
+  if (!d) return "";
+  if (d.hideActivity && !iAmAdmin()) return "";
+  if (!d.lastSeen || typeof d.lastSeen.toMillis !== "function") return "";
+  const ms = Date.now() - d.lastSeen.toMillis();
+  if (ms < 2 * 60 * 1000) return "🟢 Đang hoạt động";
+  const m = Math.floor(ms / 60000);
+  const h = Math.floor(ms / 3600000);
+  const day = Math.floor(ms / 86400000);
+  if (m < 60) return "Hoạt động " + m + " phút trước";
+  if (h < 24) return "Hoạt động " + h + " giờ trước";
+  if (day === 1) return "Hoạt động hôm qua";
+  if (day < 7) return "Hoạt động " + day + " ngày trước";
+  return "Hoạt động lâu rồi";
+}
+function refreshDmStatus() {
+  const el = document.getElementById("dm-status");
+  if (!el) return;
+  if (!currentChat || currentChat.type !== "dm" || !currentFriend) {
+    el.textContent = "";
+    return;
+  }
+  const d = (currentFriend.doc && currentFriend.doc.data && currentFriend.doc.data()) || usersMap[currentFriend.uid] || {};
+  el.textContent = activityLabel(d);
 }
 
 firebase.initializeApp(firebaseConfig);
@@ -728,11 +813,20 @@ document.getElementById("profile-trigger").addEventListener("click", () => {
 document.getElementById("close-profile-btn").addEventListener("click", () => profileModal.classList.remove("show"));
 
 const settingsModal = document.getElementById("settings-modal");
+function applyTheme(dark) {
+  document.body.classList.toggle("dark", !!dark);
+  try { localStorage.setItem("raumania-theme", dark ? "dark" : "light"); } catch (e) {}
+}
+applyTheme((function () { try { return localStorage.getItem("raumania-theme") === "dark"; } catch (e) { return false; } })());
+
 document.getElementById("settings-btn").addEventListener("click", () => {
   document.getElementById("set-activity").checked = !(currentUserData && currentUserData.hideActivity);
   document.getElementById("set-seen").checked = !(currentUserData && currentUserData.hideSeen);
+  document.getElementById("set-dark").checked = document.body.classList.contains("dark");
   settingsModal.classList.add("show");
 });
+document.getElementById("set-dark").addEventListener("change", (e) => applyTheme(e.target.checked));
+document.getElementById("friend-search").addEventListener("input", paintFriends);
 document.getElementById("settings-close").addEventListener("click", () => settingsModal.classList.remove("show"));
 settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) settingsModal.classList.remove("show"); });
 document.getElementById("set-activity").addEventListener("change", async (e) => {
@@ -968,6 +1062,8 @@ function listenOnlineUsers() {
     if (changed && lastPublicSnap) renderPublic(lastPublicSnap);
     document.getElementById("user-count").textContent = count + " người đang hoạt động";
     if (iAmAdmin() && document.getElementById("panel-admin").classList.contains("active")) loadAdminList();
+    refreshDmStatus();
+    if (document.getElementById("panel-friends").classList.contains("active")) loadFriends();
   });
 }
 
@@ -1298,34 +1394,49 @@ async function loadContacts() {
   docs.forEach(d => listEl.appendChild(buildContactCard(d, "request")));
 }
 
+let cachedFriendDocs = [];
+let cachedBlockedDocs = [];
+function paintFriends() {
+  const listEl = document.getElementById("friends-list");
+  if (!listEl) return;
+  const q = ((document.getElementById("friend-search") || {}).value || "").trim().toLowerCase();
+  const match = (d) => {
+    if (!q) return true;
+    const x = d.data() || {};
+    return ((x.name || "") + " " + (x.friendCode || "")).toLowerCase().indexOf(q) >= 0;
+  };
+  listEl.innerHTML = "";
+  const docs = cachedFriendDocs.filter(match);
+  if (cachedFriendDocs.length === 0) {
+    listEl.innerHTML = '<div class="empty-note">Bạn chưa có bạn bè nào. Vào mục Kết bạn, nhập ID để tìm nhé!</div>';
+  } else if (docs.length === 0) {
+    listEl.innerHTML = '<div class="empty-note">Không tìm thấy bạn bè khớp.</div>';
+  } else {
+    docs.forEach(d => listEl.appendChild(buildContactCard(d, "friendlist")));
+  }
+  const bdocs = cachedBlockedDocs.filter(match);
+  if (bdocs.length > 0) {
+    const t = document.createElement("div");
+    t.className = "section-title";
+    t.textContent = "Đã chặn";
+    listEl.appendChild(t);
+    bdocs.forEach(d => listEl.appendChild(buildContactCard(d, "blocked")));
+  }
+}
 async function loadFriends() {
   const listEl = document.getElementById("friends-list");
-  listEl.innerHTML = '<div class="empty-note">Đang tải...</div>';
+  if (!cachedFriendDocs.length) listEl.innerHTML = '<div class="empty-note">Đang tải...</div>';
   try {
     const meSnap = await db.collection("users").doc(currentUser.uid).get();
     contactsMe = meSnap.data() || {};
     updateReqBadge(contactsMe);
     const uids = contactsMe.friends || [];
-    const docs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
-
-    listEl.innerHTML = "";
-    if (docs.length === 0) {
-      listEl.innerHTML = '<div class="empty-note">Bạn chưa có bạn bè nào. Vào mục Kết bạn, nhập ID để tìm nhé!</div>';
-    } else {
-      docs.forEach(d => listEl.appendChild(buildContactCard(d, "friendlist")));
-    }
-
+    cachedFriendDocs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
     const blockedIds = contactsMe.blocked || [];
-    if (blockedIds.length > 0) {
-      const bdocs = (await Promise.all(blockedIds.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
-      if (bdocs.length > 0) {
-        const t = document.createElement("div");
-        t.className = "section-title";
-        t.textContent = "Đã chặn";
-        listEl.appendChild(t);
-        bdocs.forEach(d => listEl.appendChild(buildContactCard(d, "blocked")));
-      }
-    }
+    cachedBlockedDocs = blockedIds.length
+      ? (await Promise.all(blockedIds.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists)
+      : [];
+    paintFriends();
   } catch (e) {
     listEl.innerHTML = '<div class="empty-note">Không tải được danh sách bạn bè, thử lại sau.</div>';
   }
@@ -1406,7 +1517,8 @@ function buildContactCard(doc, state) {
 
   const info = document.createElement("div");
   info.className = "contact-info";
-  const onTxt = visibleOnline(d) ? '<div class="cemail"><span class="online-dot"></span>Đang hoạt động</div>' : '<div class="cemail">ID: ' + escapeHtml(d.friendCode || "") + "</div>";
+  const act = activityLabel(d);
+  const onTxt = '<div class="cemail">' + (act ? escapeHtml(act) : ("ID: " + escapeHtml(d.friendCode || ""))) + "</div>";
   info.innerHTML = `<div class="cname">${escapeHtml(d.name || "Ẩn danh")}</div>${onTxt}`;
 
   const wrap = document.createElement("div");
@@ -1553,14 +1665,40 @@ function openChatInfo() {
   document.getElementById("ci-top-title").textContent = name;
   document.getElementById("ci-name").textContent = name;
   setAvatar(document.getElementById("ci-avatar"), name, photo);
-  document.getElementById("ci-group").style.display = isG ? "flex" : "none";
+  document.getElementById("ci-edit-photo").style.display = isG ? "block" : "none";
+  document.getElementById("ci-edit-name").style.display = isG ? "block" : "none";
+  document.getElementById("ci-name-input").style.display = "none";
   document.getElementById("chat-info").classList.add("show");
 }
 ["dm-avatar", "dm-name"].forEach(id => {
   document.getElementById(id).addEventListener("click", openChatInfo);
 });
 document.getElementById("ci-back").addEventListener("click", () => document.getElementById("chat-info").classList.remove("show"));
-document.getElementById("ci-group").addEventListener("click", () => { document.getElementById("chat-info").classList.remove("show"); document.getElementById("dm-group-btn").click(); });
+document.getElementById("ci-edit-photo").addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (!currentChat || currentChat.type !== "group") return;
+  document.getElementById("gset-input").click();
+});
+document.getElementById("ci-edit-name").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const inp = document.getElementById("ci-name-input");
+  inp.style.display = "block";
+  inp.value = (currentChat && currentChat.name) || "";
+  inp.focus();
+});
+document.getElementById("ci-name-input").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter") return;
+  const name = e.target.value.trim();
+  if (!name || !currentChat || currentChat.type !== "group") return;
+  try {
+    await chatDocRef().update({ name: name });
+    currentChat.name = name;
+    document.getElementById("dm-name").textContent = name;
+    document.getElementById("ci-name").textContent = name;
+    document.getElementById("ci-top-title").textContent = name;
+    e.target.style.display = "none";
+  } catch (err) { alert("Không đổi được tên nhóm."); }
+});
 document.getElementById("ci-nick").addEventListener("click", () => { document.getElementById("chat-info").classList.remove("show"); document.getElementById("dm-nick-btn").click(); });
 document.getElementById("ci-theme").addEventListener("click", () => { document.getElementById("chat-info").classList.remove("show"); document.getElementById("dm-theme-btn").click(); });
 
@@ -1634,6 +1772,7 @@ function openDM(friend) {
   if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
   setAvatar(document.getElementById("dm-avatar"), friend.name, friend.doc && friend.doc.data().photo);
   document.getElementById("dm-name").textContent = nickFor(friend.uid) || friend.name;
+  refreshDmStatus();
 
   // giữ tab "Bạn bè" sáng, chuyển sang panel chat riêng
   document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "friends"));
@@ -2001,6 +2140,8 @@ function openGroup(id, g) {
   markChatRead();
   setAvatar(document.getElementById("dm-avatar"), g.name, g.photo || "");
   document.getElementById("dm-name").textContent = g.name || "Nhóm";
+  const st = document.getElementById("dm-status");
+  if (st) st.textContent = "";
   document.getElementById("dm-theme-btn").style.display = "none";
   document.getElementById("dm-group-btn").style.display = "none";
   applyDMBg(g.bg || "");
@@ -2250,6 +2391,7 @@ document.getElementById("gset-input").addEventListener("change", async (e) => {
     currentChat.photo = d;
     setAvatar(document.getElementById("gset-avatar"), currentChat.name, d);
     setAvatar(document.getElementById("dm-avatar"), currentChat.name, d);
+    setAvatar(document.getElementById("ci-avatar"), currentChat.name, d);
   } catch (err) { alert("Không đổi được ảnh nhóm lúc này."); }
 });
 document.getElementById("gset-photo-del").addEventListener("click", async () => {
