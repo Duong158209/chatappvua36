@@ -261,6 +261,7 @@
         <button class="back-btn" id="dm-back" title="Quay lại">←</button>
         <div class="avatar" id="dm-avatar">?</div>
         <div><div class="title" id="dm-name">—</div></div>
+        <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat" style="margin-left:auto;">🎨</button>
       </div>
       <div id="dm-messages"></div>
       <form id="dm-form">
@@ -302,6 +303,18 @@
       <button class="modal-cancel" id="cancel-logout">Hủy</button>
       <button class="modal-confirm-danger" id="confirm-logout">Đăng xuất</button>
     </div>
+  </div>
+</div>
+
+<!-- ============ CHAT THEME MODAL ============ -->
+<div class="modal-overlay" id="theme-modal">
+  <div class="modal-box">
+    <h3>Giao diện đoạn chat</h3>
+    <p>Ảnh nền này chỉ mình bạn thấy trong đoạn chat với <b id="theme-friend"></b>.</p>
+    <button class="modal-btn-primary" id="theme-pick" style="margin-top:0;">🖼️ Chọn ảnh nền</button>
+    <button class="modal-btn-soft" id="theme-reset" style="width:100%; margin-top:8px;">Đặt lại mặc định</button>
+    <button class="modal-btn-close" id="theme-close">Đóng</button>
+    <input type="file" id="theme-input" accept="image/*" style="display:none;">
   </div>
 </div>
 
@@ -1108,7 +1121,8 @@ function openDM(friend) {
 
   const dmEl = document.getElementById("dm-messages");
   dmEl.innerHTML = "";
-  unsubscribeDM = db.collection("chats").doc(dmChatId(friend.uid)).collection("messages")
+  applyDMBg("");
+  const unsubMsgs = db.collection("chats").doc(dmChatId(friend.uid)).collection("messages")
     .orderBy("createdAt", "asc")
     .limitToLast(200)
     .onSnapshot((snap) => {
@@ -1124,7 +1138,76 @@ function openDM(friend) {
     }, () => {
       dmEl.innerHTML = '<div class="empty-note">Không tải được tin nhắn, kiểm tra lại quyền (rules) nhé.</div>';
     });
+
+  // ảnh nền riêng của mình cho đoạn chat này
+  const unsubBg = db.collection("chats").doc(dmChatId(friend.uid)).onSnapshot((doc) => {
+    const d = doc.data() || {};
+    applyDMBg(d["bg_" + currentUser.uid] || "");
+  }, () => {});
+
+  unsubscribeDM = () => { unsubMsgs(); unsubBg(); };
 }
+
+function applyDMBg(url) {
+  const el = document.getElementById("dm-messages");
+  el.style.background = url
+    ? 'linear-gradient(rgba(8,16,28,.35), rgba(8,16,28,.35)), url("' + url + '") center / cover no-repeat'
+    : "";
+}
+
+/* ---- đổi giao diện đoạn chat ---- */
+const themeModal = document.getElementById("theme-modal");
+document.getElementById("dm-theme-btn").addEventListener("click", () => {
+  if (!currentFriend) return;
+  document.getElementById("theme-friend").textContent = currentFriend.name;
+  themeModal.classList.add("show");
+});
+document.getElementById("theme-close").addEventListener("click", () => themeModal.classList.remove("show"));
+document.getElementById("theme-pick").addEventListener("click", () => document.getElementById("theme-input").click());
+
+function imageToDataURLMax(file, maxSide) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", 0.72));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById("theme-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file || !currentFriend) return;
+  try {
+    const dataUrl = await imageToDataURLMax(file, 900);
+    if (dataUrl.length > 700000) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
+    await db.collection("chats").doc(dmChatId(currentFriend.uid)).set({ ["bg_" + currentUser.uid]: dataUrl }, { merge: true });
+    themeModal.classList.remove("show");
+  } catch (err) {
+    alert("Không đổi được ảnh nền lúc này, kiểm tra lại rules hoặc thử ảnh khác.");
+  }
+});
+
+document.getElementById("theme-reset").addEventListener("click", async () => {
+  if (!currentFriend) return;
+  try {
+    await db.collection("chats").doc(dmChatId(currentFriend.uid)).set({ ["bg_" + currentUser.uid]: firebase.firestore.FieldValue.delete() }, { merge: true });
+    themeModal.classList.remove("show");
+  } catch (err) {
+    alert("Không đặt lại được lúc này.");
+  }
+});
 
 document.getElementById("dm-back").addEventListener("click", () => {
   document.querySelector('.nav-tab[data-tab="friends"]').click();
