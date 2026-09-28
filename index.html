@@ -85,7 +85,15 @@
   .msg-row.me + .msg-meta { text-align: right; margin: 0 0 8px 0; }
   .sender-label { font-size: 11px; color: #888; margin: 6px 0 2px 34px; }
 
-  #chat-form, #dm-form { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid #eee; }
+  #chat-form, #dm-form {
+    display: flex; gap: 8px; align-items: center;
+    padding: 10px 12px;
+    border-top: 1px solid #eee;
+    background: #fff;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 30;
+  }
   #chat-form input, #dm-form input { flex: 1; padding: 12px 16px; border: 1px solid #ddd; border-radius: 22px; font-size: 14px; outline: none; }
   #chat-form button, #dm-form button {
     background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 50%;
@@ -97,13 +105,7 @@
   #emoji-pop.show { display: flex; }
   #emoji-pop span { width: 33px; height: 33px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; border-radius: 8px; }
   #emoji-pop span:hover { background: #f0f0f2; }
-  .bubble:has(.chat-img) { max-width: min(82%, 420px); background: #111; padding: 3px; }
-  .bubble img.chat-img {
-    display: block; width: auto; height: auto;
-    max-width: 100%; max-height: min(52vh, 420px);
-    object-fit: contain; object-position: center;
-    border-radius: 12px; cursor: zoom-in; background: #111;
-  }
+  .bubble img.chat-img { display: block; max-width: 100%; max-height: 260px; border-radius: 14px; cursor: zoom-in; }
   .bubble a.chat-file { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
   .bubble a.chat-file .fn { font-weight: 600; word-break: break-all; }
   .bubble a.chat-file .fs { font-size: 11px; opacity: .75; }
@@ -200,8 +202,8 @@
   #app-screen.chat-focus .sidebar { display: none !important; }
   #app-screen.chat-focus .layout { height: 100%; }
   #app-screen.chat-focus .panel.active {
-    position: fixed; left: 0; right: 0; top: 0;
-    height: calc(100dvh - 28px); height: calc(100vh - 28px);
+    position: fixed; left: 0; right: 0; top: 0; bottom: 28px;
+    height: auto;
     z-index: 200; background: #fff;
   }
   #app-screen.chat-focus .panel-header {
@@ -890,6 +892,7 @@ function messageColRef(scope) {
 
 function renderMessage(m, pending, container, group, msgId, scope) {
   const messagesEl = container || document.getElementById("messages");
+  if (msgId && isHiddenLocally(msgId)) return;
   if (currentUser && Array.isArray(m.deletedFor) && m.deletedFor.indexOf(currentUser.uid) >= 0) return;
   const showName = group !== false;
   const isMe = currentUser && m.uid === currentUser.uid;
@@ -946,9 +949,8 @@ function renderMessage(m, pending, container, group, msgId, scope) {
   }
   if (pending) bubble.style.opacity = "0.6";
   if (msgId && !m.recalled) {
-    bubble.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      openMsgAction(ev, { id: msgId, scope: scope || (messagesEl.id === "dm-messages" ? "dm" : "public"), isMe: !!isMe, uid: m.uid });
+    bindLongPress(bubble, (pt) => {
+      openMsgAction(pt, { id: msgId, scope: scope || (messagesEl.id === "dm-messages" ? "dm" : "public"), isMe: !!isMe, uid: m.uid });
     });
   }
   row.appendChild(bubble);
@@ -963,6 +965,50 @@ function renderMessage(m, pending, container, group, msgId, scope) {
 }
 
 let msgActionTarget = null;
+function hiddenIdsKey() {
+  return "raumania_hidden_" + ((currentUser && currentUser.uid) || "x");
+}
+function loadHiddenIds() {
+  try { return JSON.parse(localStorage.getItem(hiddenIdsKey()) || "[]"); } catch (e) { return []; }
+}
+function saveHiddenId(id) {
+  const arr = loadHiddenIds();
+  if (arr.indexOf(id) < 0) { arr.push(id); localStorage.setItem(hiddenIdsKey(), JSON.stringify(arr)); }
+}
+function isHiddenLocally(id) {
+  return id && loadHiddenIds().indexOf(id) >= 0;
+}
+
+function bindLongPress(el, onHold) {
+  let timer = null, sx = 0, sy = 0, fired = false;
+  const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  const begin = (e) => {
+    const p = e.touches ? e.touches[0] : e;
+    sx = p.clientX; sy = p.clientY; fired = false;
+    clear();
+    timer = setTimeout(() => {
+      fired = true;
+      if (navigator.vibrate) try { navigator.vibrate(20); } catch (err) {}
+      onHold({ clientX: sx, clientY: sy });
+    }, 1000);
+  };
+  const move = (e) => {
+    const p = e.touches ? e.touches[0] : e;
+    if (!p) return;
+    if (Math.abs(p.clientX - sx) > 12 || Math.abs(p.clientY - sy) > 12) clear();
+  };
+  el.addEventListener("touchstart", begin, { passive: true });
+  el.addEventListener("mousedown", begin);
+  el.addEventListener("touchmove", move, { passive: true });
+  el.addEventListener("mousemove", move);
+  el.addEventListener("touchend", clear);
+  el.addEventListener("touchcancel", clear);
+  el.addEventListener("mouseup", clear);
+  el.addEventListener("mouseleave", clear);
+  el.addEventListener("contextmenu", (e) => { e.preventDefault(); });
+  el.addEventListener("click", (e) => { if (fired) { e.preventDefault(); e.stopPropagation(); fired = false; } }, true);
+}
+
 function openMsgAction(ev, info) {
   msgActionTarget = info;
   const menu = document.getElementById("msg-action");
@@ -983,27 +1029,37 @@ document.addEventListener("click", () => {
 
 async function recallForMe() {
   if (!msgActionTarget || !currentUser) return;
+  saveHiddenId(msgActionTarget.id);
   const col = messageColRef(msgActionTarget.scope === "public" ? "public" : "dm");
   if (!col) return;
   try {
-    await col.doc(msgActionTarget.id).update({ deletedFor: FV().arrayUnion(currentUser.uid) });
-  } catch (e) { alert("Không ẩn được tin nhắn lúc này."); }
+    await col.doc(msgActionTarget.id).set({ deletedFor: FV().arrayUnion(currentUser.uid) }, { merge: true });
+  } catch (e) { /* vẫn ẩn trên máy mình nhờ localStorage */ }
 }
+
 async function recallForAll() {
   if (!msgActionTarget || !msgActionTarget.isMe) return;
   if (!confirm("Thu hồi tin nhắn này với tất cả mọi người?")) return;
+  saveHiddenId(msgActionTarget.id);
   const col = messageColRef(msgActionTarget.scope === "public" ? "public" : "dm");
   if (!col) return;
+  const ref = col.doc(msgActionTarget.id);
   try {
-    await col.doc(msgActionTarget.id).update({
+    await ref.set({
       recalled: true,
       text: "",
-      type: "text",
-      image: FV().delete(),
-      fileData: FV().delete(),
-      fileURL: FV().delete()
-    });
-  } catch (e) { alert("Không thu hồi được. Kiểm tra quyền Firestore nhé."); }
+      type: "recalled",
+      image: firebase.firestore.FieldValue.delete(),
+      fileData: firebase.firestore.FieldValue.delete(),
+      fileURL: firebase.firestore.FieldValue.delete()
+    }, { merge: true });
+  } catch (e1) {
+    try {
+      await ref.delete();
+    } catch (e2) {
+      alert("Không thu hồi được trên server. Hãy dán lại Firestore rules. Tin đã ẩn trên máy bạn.");
+    }
+  }
 }
 document.getElementById("ma-me").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("msg-action").classList.remove("show"); recallForMe(); });
 document.getElementById("ma-all").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("msg-action").classList.remove("show"); recallForAll(); });
