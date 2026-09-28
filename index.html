@@ -152,10 +152,19 @@
   }
   .nav-tab { position: relative; }
   .nav-unread {
-    margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px;
+    position: absolute; top: 4px; right: 4px; margin: 0;
+    min-width: 18px; height: 18px; padding: 0 5px;
     background: #e0245e; color: #fff; border-radius: 999px;
     font-size: 10px; font-weight: 800; line-height: 18px; text-align: center;
+    z-index: 2; pointer-events: none;
   }
+  #app-toast {
+    display: none; position: fixed; left: 12px; right: 12px; top: 10px; z-index: 99999;
+    background: #1c1c1e; color: #fff; border-radius: 14px; padding: 12px 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 14px;
+  }
+  #app-toast.show { display: block; }
+  #app-toast b { display: block; margin-bottom: 3px; }
   .contact-card:hover { background: #f7f7f9; }
   .contact-info { flex: 1; min-width: 0; }
   .contact-info .cname { font-size: 14px; font-weight: 600; color: #222; }
@@ -359,6 +368,7 @@
 </style>
 </head>
 <body>
+<div id="app-toast"></div>
 
 <!-- ============ AUTH SCREEN ============ -->
 <div id="auth-screen">
@@ -1167,21 +1177,38 @@ function viewingChat(chatKey) {
   if (chatKey === "public") return document.getElementById("panel-chat").classList.contains("active");
   return !!(currentChat && currentChat.id === chatKey && document.getElementById("panel-dm").classList.contains("active"));
 }
+function showAppToast(title, body) {
+  const el = document.getElementById("app-toast");
+  if (!el) return;
+  el.innerHTML = "<b>" + escapeHtml(title || "Raumania") + "</b>" + escapeHtml(body || "");
+  el.classList.add("show");
+  clearTimeout(showAppToast._t);
+  showAppToast._t = setTimeout(() => el.classList.remove("show"), 3500);
+}
 function notifyIncoming(id, m, title, chatKey) {
   if (!id || seenNotify[id]) return;
   seenNotify[id] = 1;
   if (!notifyReady || !currentUser || !m) return;
   if (m.uid === currentUser.uid || m.recalled || m.type === "recalled") return;
   if (viewingChat(chatKey)) return;
-  playNotifySound();
   const body = m.type === "image" ? "Đã gửi một ảnh" : m.type === "voice" ? "Đã gửi tin thoại" : m.type === "file" ? "Đã gửi một tệp" : (m.text || "Tin nhắn mới");
+  playNotifySound();
+  showAppToast(title || "Raumania", body);
   if (window.Notification && Notification.permission === "granted") {
     try { new Notification(title || "Raumania", { body: body, tag: String(id) }); } catch (e) {}
   }
 }
 function requestNotifyPerm() {
-  if (!window.Notification) return alert("Trình duyệt không hỗ trợ thông báo.");
-  Notification.requestPermission();
+  unlockAudio();
+  if (window.Notification && Notification.permission !== "granted") {
+    Notification.requestPermission().then((p) => {
+      alert(p === "granted"
+        ? "Đã bật thông báo."
+        : "iPhone Safari không cho banner hệ thống. App sẽ kêu và hiện thanh trên màn hình khi có tin.");
+    });
+    return;
+  }
+  alert("Đã bật tiếng báo trong app. iPhone không hiện thông báo ngoài khi chỉ mở bằng Safari.");
 }
 
 function listenMessages() {
