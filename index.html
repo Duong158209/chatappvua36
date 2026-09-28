@@ -258,6 +258,12 @@
     font-size: 16px; text-align: left; cursor: pointer;
   }
   #chat-info .ci-row + .ci-row { border-top: 1px solid #2c2c2e; }
+  .ci-mem { display: flex; align-items: center; gap: 8px; padding: 8px 4px; }
+  .ci-mem .avatar { width: 36px; height: 36px; font-size: 14px; }
+  .ci-mem .nm { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: #f5f5f7; }
+  .ci-mem .role { font-size: 11px; color: #c7b3e8; }
+  .ci-mem .acts { display: flex; flex-wrap: wrap; gap: 4px; }
+  .ci-mem .acts button { border: none; background: #3a3a3c; color: #fff; border-radius: 8px; padding: 4px 8px; font-size: 11px; }
   #chat-info .ci-ico { width: 28px; text-align: center; }
   .empty-note { text-align: center; color: #999; font-size: 13px; margin: 20px 8px; padding: 0 12px; line-height: 1.5; }
 
@@ -311,7 +317,11 @@
     box-shadow: 0 1px 0 rgba(0,0,0,.06);
   }
   .msg-row { position: relative; }
-  .msg-row .bubble { cursor: pointer; }
+  .msg-row .bubble { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  #messages, #dm-messages, .msg-row, #msg-action {
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  #msg-action { z-index: 9000; }
   .recalled-bubble {
     background: transparent !important;
     color: #888 !important;
@@ -327,13 +337,17 @@
     min-width: 220px; overflow: hidden;
   }
   #msg-action.show { display: block; }
-  #msg-action button {
+  #msg-action button { min-height: 44px;
     display: block; width: 100%; text-align: left;
     border: none; background: none; padding: 12px 16px;
     font-size: 14px; cursor: pointer; color: #222;
   }
   #msg-action button:hover { background: #f5f3fb; }
   #msg-action button.danger { color: #e0245e; font-weight: 600; }
+  .pin-bar { display: none; padding: 8px 12px; background: rgba(118,75,162,.18); color: #eee; font-size: 13px; border-bottom: 1px solid #2c2c2e; cursor: pointer; }
+  .pin-bar.show { display: flex; align-items: center; gap: 8px; }
+  .pin-bar .pt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pin-bar .pu { border: none; background: transparent; color: #ff8a80; font-size: 12px; }
 
   @media (max-width: 700px) {
     .sidebar { width: 100px; }
@@ -474,6 +488,7 @@
           <div class="status" id="user-count">—</div>
         </div>
       </div>
+      <div class="pin-bar" id="world-pin" style="display:none;"></div>
       <div id="messages"></div>
       <form id="chat-form">
         <input type="text" id="msg-input" placeholder="Aa" autocomplete="off">
@@ -494,6 +509,7 @@
         <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh" style="display:none;">✏️</button>
         <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat" style="display:none;">🎨</button>
       </div>
+      <div class="pin-bar" id="dm-pin" style="display:none;"></div>
       <div id="dm-messages"></div>
       <form id="dm-form">
         <input type="text" id="dm-input" placeholder="Aa" autocomplete="off">
@@ -725,10 +741,13 @@
   <div class="ci-card">
     <button type="button" class="ci-row" id="ci-nick"><span class="ci-ico">Aa</span> Biệt danh</button>
     <button type="button" class="ci-row" id="ci-theme"><span class="ci-ico">🎨</span> Đổi ảnh nền</button>
+    <button type="button" class="ci-row" id="ci-members" style="display:none;"><span class="ci-ico">👥</span> Thành viên</button>
   </div>
+  <div class="ci-card" id="ci-mem-box" style="display:none; margin-top:10px; padding:8px;"></div>
 </div>
 <div id="msg-action">
   <button type="button" id="ma-me">Ẩn với mình</button>
+  <button type="button" id="ma-pin">Ghim tin nhắn</button>
   <button type="button" id="ma-all" class="danger">Thu hồi với mọi người</button>
 </div>
 <script>
@@ -1224,8 +1243,10 @@ let unsubscribePublicReads = null;
 function listenPublicReads() {
   if (unsubscribePublicReads) return;
   const apply = (d) => {
-    const r = (d && d.exists && d.data() && d.data().reads) || {};
+    const data = (d && d.exists && d.data()) || {};
+    const r = data.reads || {};
     publicReads = Object.assign({}, publicReads, r);
+    if (data.pinned) applyPinned("public", data.pinned);
     if (lastPublicSnap) renderPublic(lastPublicSnap);
   };
   const a = db.collection("meta").doc("public").onSnapshot(apply, () => {});
@@ -1550,9 +1571,11 @@ function bindLongPress(el, onHold) {
   const begin = (e) => {
     const p = e.touches ? e.touches[0] : e;
     sx = p.clientX; sy = p.clientY; fired = false;
+    try { window.getSelection().removeAllRanges(); } catch (err) {}
     clear();
     timer = setTimeout(() => {
       fired = true;
+      try { window.getSelection().removeAllRanges(); } catch (err) {}
       if (navigator.vibrate) try { navigator.vibrate(20); } catch (err) {}
       onHold({ clientX: sx, clientY: sy });
     }, 1000);
@@ -1579,8 +1602,10 @@ function openMsgAction(ev, info) {
   const menu = document.getElementById("msg-action");
   document.getElementById("ma-all").style.display = info.isMe ? "block" : "none";
   document.getElementById("ma-me").textContent = info.isMe ? "Thu hồi với mình" : "Ẩn với mình";
+  const cur = currentPinned();
+  document.getElementById("ma-pin").textContent = (cur && cur.id === info.id) ? "Huỷ ghim" : "Ghim tin nhắn";
   menu.classList.add("show");
-  const w = 230, h = info.isMe ? 96 : 52;
+  const w = 230, h = info.isMe ? 132 : 88;
   let x = ev.clientX, y = ev.clientY;
   if (x + w > window.innerWidth - 8) x = window.innerWidth - w - 8;
   if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
@@ -1634,6 +1659,65 @@ async function recallForAll() {
     }
   }
 }
+let worldPinned = null;
+let chatPinned = null;
+function currentPinned() {
+  if (document.getElementById("panel-chat") && document.getElementById("panel-chat").classList.contains("active")) return worldPinned;
+  return chatPinned;
+}
+function pinDocRef(scope) {
+  if (scope === "public") return db.collection("chats").doc("__world");
+  if (!currentChat) return null;
+  return (currentChat.type === "group" ? db.collection("groups") : db.collection("chats")).doc(currentChat.id);
+}
+function paintPinBar(el, pin) {
+  if (!el) return;
+  if (!pin || !pin.id) { el.classList.remove("show"); el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "flex"; el.classList.add("show");
+  el.innerHTML = "";
+  const t = document.createElement("div"); t.className = "pt";
+  t.textContent = "📌 " + (pin.preview || "Tin đã ghim");
+  const u = document.createElement("button"); u.type = "button"; u.className = "pu"; u.textContent = "Huỷ ghim";
+  u.addEventListener("click", (e) => { e.stopPropagation(); unpinNow(el.id === "world-pin" ? "public" : "dm"); });
+  el.appendChild(t); el.appendChild(u);
+  el.onclick = () => {
+    const box = el.id === "world-pin" ? document.getElementById("messages") : document.getElementById("dm-messages");
+    const row = box && box.querySelector('.msg-row[data-id="' + pin.id + '"]');
+    if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+}
+function applyPinned(scope, pin) {
+  if (scope === "public") { worldPinned = pin; paintPinBar(document.getElementById("world-pin"), pin); }
+  else { chatPinned = pin; paintPinBar(document.getElementById("dm-pin"), pin); }
+}
+async function pinNow() {
+  const info = msgActionTarget;
+  if (!info) return;
+  const scope = info.scope === "public" ? "public" : "dm";
+  const cur = currentPinned();
+  const ref = pinDocRef(scope);
+  if (!ref) return;
+  if (cur && cur.id === info.id) return unpinNow(scope);
+  let preview = "Tin nhắn";
+  try {
+    const col = messageColRef(scope === "public" ? "public" : "dm");
+    const s = await col.doc(info.id).get();
+    const m = s.data() || {};
+    preview = m.type === "image" ? "[Ảnh]" : m.type === "voice" ? "[Tin thoại]" : m.type === "file" ? "[Tệp]" : m.type === "poll" ? "[Bỏ phiếu]" : m.type === "location" ? "[Vị trí]" : (m.text || "Tin nhắn");
+    if (preview.length > 60) preview = preview.slice(0, 60) + "…";
+  } catch (e) {}
+  ref.set({ pinned: { id: info.id, preview: preview, uid: info.uid || "" } }, { merge: true }).catch(() => alert("Không ghim được."));
+}
+function unpinNow(scope) {
+  const ref = pinDocRef(scope);
+  if (!ref) return;
+  ref.set({ pinned: firebase.firestore.FieldValue.delete() }, { merge: true }).catch(() => alert("Không huỷ ghim được."));
+}
+document.getElementById("ma-pin").addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("msg-action").classList.remove("show");
+  pinNow();
+});
 document.getElementById("ma-me").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("msg-action").classList.remove("show"); recallForMe(); });
 document.getElementById("ma-all").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("msg-action").classList.remove("show"); recallForAll(); });
 
@@ -1977,6 +2061,83 @@ async function unblockUser(otherUid, btnEl) {
   }
 }
 
+function isGroupOwner() {
+  return !!(currentChat && currentChat.type === "group" && currentUser && currentChat.createdBy === currentUser.uid);
+}
+function fillGroupMembers() {
+  const box = document.getElementById("ci-mem-box");
+  if (!box || !currentChat || currentChat.type !== "group") { if (box) box.style.display = "none"; return; }
+  box.style.display = "block";
+  box.innerHTML = "";
+  const owner = currentChat.createdBy;
+  const admins = currentChat.admins || [];
+  const members = currentChat.members || [];
+  members.forEach((uid) => {
+    const u = usersMap[uid] || {};
+    const row = document.createElement("div");
+    row.className = "ci-mem";
+    const av = document.createElement("div"); av.className = "avatar";
+    setAvatar(av, u.name || "?", u.photo || "");
+    const nm = document.createElement("div"); nm.className = "nm";
+    let role = "";
+    if (uid === owner) role = "Chủ nhóm";
+    else if (admins.indexOf(uid) >= 0) role = "Quản trị";
+    nm.innerHTML = escapeHtml(nickFor(uid) || u.name || "Thành viên") + (role ? '<div class="role">' + role + "</div>" : "");
+    row.appendChild(av); row.appendChild(nm);
+    if (isGroupOwner() && uid !== currentUser.uid) {
+      const acts = document.createElement("div"); acts.className = "acts";
+      const kick = document.createElement("button"); kick.textContent = "Kick";
+      kick.addEventListener("click", () => groupKick(uid));
+      const promo = document.createElement("button");
+      const isAd = admins.indexOf(uid) >= 0;
+      promo.textContent = isAd ? "Gỡ QT" : "Thăng QT";
+      promo.addEventListener("click", () => groupSetAdmin(uid, !isAd));
+      const own = document.createElement("button"); own.textContent = "Chuyển chủ";
+      own.addEventListener("click", () => groupTransfer(uid));
+      acts.appendChild(kick); acts.appendChild(promo); acts.appendChild(own);
+      row.appendChild(acts);
+    }
+    box.appendChild(row);
+  });
+}
+async function groupKick(uid) {
+  if (!isGroupOwner() || !confirm("Kick thành viên này khỏi nhóm?")) return;
+  try {
+    await chatDocRef().update({
+      members: firebase.firestore.FieldValue.arrayRemove(uid),
+      admins: firebase.firestore.FieldValue.arrayRemove(uid)
+    });
+    currentChat.members = (currentChat.members || []).filter((x) => x !== uid);
+    currentChat.admins = (currentChat.admins || []).filter((x) => x !== uid);
+    fillGroupMembers();
+  } catch (e) { alert("Không kick được."); }
+}
+async function groupSetAdmin(uid, on) {
+  if (!isGroupOwner()) return;
+  try {
+    await chatDocRef().update({
+      admins: on ? firebase.firestore.FieldValue.arrayUnion(uid) : firebase.firestore.FieldValue.arrayRemove(uid)
+    });
+    const s = new Set(currentChat.admins || []);
+    if (on) s.add(uid); else s.delete(uid);
+    currentChat.admins = Array.from(s);
+    fillGroupMembers();
+  } catch (e) { alert("Không đổi quyền được."); }
+}
+async function groupTransfer(uid) {
+  if (!isGroupOwner() || !confirm("Chuyển quyền chủ nhóm cho người này?")) return;
+  try {
+    await chatDocRef().update({
+      createdBy: uid,
+      admins: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+    });
+    currentChat.createdBy = uid;
+    const s = new Set(currentChat.admins || []);
+    s.add(currentUser.uid);
+    currentChat.admins = Array.from(s);
+    fillGroupMembers();
+  } catch (e) { alert("Không chuyển quyền được."); }
+}
 function openChatInfo() {
   if (!currentChat) return;
   const isG = currentChat.type === "group";
@@ -1988,6 +2149,8 @@ function openChatInfo() {
   document.getElementById("ci-edit-photo").style.display = isG ? "block" : "none";
   document.getElementById("ci-edit-name").style.display = isG ? "block" : "none";
   document.getElementById("ci-name-input").style.display = "none";
+  document.getElementById("ci-members").style.display = isG ? "flex" : "none";
+  document.getElementById("ci-mem-box").style.display = "none";
   document.getElementById("chat-info").classList.add("show");
 }
 ["dm-avatar", "dm-name"].forEach(id => {
@@ -2021,6 +2184,11 @@ document.getElementById("ci-name-input").addEventListener("keydown", async (e) =
 });
 document.getElementById("ci-nick").addEventListener("click", () => { document.getElementById("chat-info").classList.remove("show"); document.getElementById("dm-nick-btn").click(); });
 document.getElementById("ci-theme").addEventListener("click", () => { document.getElementById("chat-info").classList.remove("show"); document.getElementById("dm-theme-btn").click(); });
+document.getElementById("ci-members").addEventListener("click", () => {
+  const box = document.getElementById("ci-mem-box");
+  if (box.style.display === "block") box.style.display = "none";
+  else fillGroupMembers();
+});
 
 function dmChatId(otherUid) {
   return [currentUser.uid, otherUid].sort().join("_");
@@ -2036,6 +2204,7 @@ function listenChatReads() {
   if (!ref) return;
   unsubscribeChatMeta = ref.onSnapshot((doc) => {
     chatReads = (doc.exists && doc.data() && doc.data().reads) || {};
+    applyPinned("dm", (doc.exists && doc.data() && doc.data().pinned) || null);
     if (lastChatSnap) renderChatSnap(lastChatSnap);
   });
 }
@@ -2504,7 +2673,7 @@ function listenGroups() {
 function openGroup(id, g) {
   if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
   currentFriend = null;
-  currentChat = { type: "group", id: id, members: g.members || [], name: g.name, photo: g.photo || "" };
+  currentChat = { type: "group", id: id, members: g.members || [], name: g.name, photo: g.photo || "", createdBy: g.createdBy || "", admins: g.admins || [] };
   sharedNicks = g.nicks || {}; lastChatSnap = null;
   listenChatReads();
   markChatRead();
@@ -2526,7 +2695,10 @@ function openGroup(id, g) {
     const d = doc.data(); if (!d) return;
     sharedNicks = d.nicks || {};
     currentChat.members = d.members || [];
+    currentChat.createdBy = d.createdBy || currentChat.createdBy || "";
+    currentChat.admins = d.admins || [];
     currentChat.name = d.name; currentChat.photo = d.photo || "";
+    if (document.getElementById("ci-mem-box").style.display === "block") fillGroupMembers();
     document.getElementById("dm-name").textContent = d.name || "Nhóm";
     setAvatar(document.getElementById("dm-avatar"), d.name, d.photo || "");
     applyDMBg(d.bg || "");
