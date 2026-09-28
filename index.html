@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatApp</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  body { background: #f0f2f5; height: 100vh; overflow: hidden; }
+
+  /* ---------- AUTH SCREEN ---------- */
+  #auth-screen {
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; background: linear-gradient(135deg, #667eea, #764ba2); padding: 16px;
+  }
+  .auth-box { background: white; width: 100%; max-width: 380px; border-radius: 20px; padding: 36px 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .auth-box h1 { text-align: center; font-size: 26px; color: #222; margin-bottom: 6px; }
+  .auth-box p.sub { text-align: center; font-size: 13px; color: #888; margin-bottom: 24px; }
+  .auth-box input { width: 100%; padding: 13px 15px; border: 1.5px solid #e2e4e8; border-radius: 12px; font-size: 14px; margin-bottom: 12px; }
+  .auth-box input:focus { outline: none; border-color: #764ba2; }
+  .auth-box button.primary {
+    width: 100%; padding: 13px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700;
+    cursor: pointer; background: linear-gradient(135deg, #667eea, #764ba2); color: white; margin-top: 4px;
+  }
+  .switch-mode { text-align: center; font-size: 13px; color: #666; margin-top: 18px; }
+  .switch-mode a { color: #764ba2; font-weight: 600; text-decoration: none; }
+  #auth-error { color: #e0245e; font-size: 13px; text-align: center; min-height: 18px; margin: 6px 0; }
+  #auth-loading { text-align: center; font-size: 13px; color: #888; min-height: 16px; }
+
+  /* ---------- MAIN APP ---------- */
+  #app-screen { display: none; height: 100vh; height: 100dvh; }
+  .layout { display: flex; height: 100%; }
+
+  .sidebar { width: 220px; background: white; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; }
+  .sidebar-header { padding: 16px; border-bottom: 1px solid #eee; }
+  .sidebar-header h2 { font-size: 18px; color: #050505; }
+
+  .me-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #f0f0f0; }
+  #profile-trigger { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; background: none; border: none; text-align: left; padding: 0; }
+  #profile-trigger:active { opacity: 0.7; }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0;
+  }
+  .me-text { min-width: 0; }
+  .me-text .name { font-size: 14px; font-weight: 600; color: #050505; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me-text .email { font-size: 11px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #logout-btn {
+    margin-top: auto; border: none; border-top: 1px solid #eee; background: none; color: #e0245e;
+    font-size: 14px; font-weight: 600; cursor: pointer; padding: 14px 16px;
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  #logout-btn:active { background: #fbe9ee; }
+
+  .nav-tab { padding: 13px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-left: 3px solid transparent; font-size: 14px; color: #444; }
+  .nav-tab.active { background: #f3ecfc; border-left-color: #764ba2; color: #222; font-weight: 600; }
+  .nav-tab .tab-icon { font-size: 18px; width: 22px; text-align: center; flex-shrink: 0; }
+  .nav-tab .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .panel { flex: 1; display: none; flex-direction: column; background: #fff; overflow: hidden; }
+  .panel.active { display: flex; }
+  .panel-header { padding: 14px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; }
+  .panel-header .title { font-size: 16px; font-weight: 600; color: #050505; }
+  .panel-header .status { font-size: 12px; color: #31a24c; }
+
+  /* chat */
+  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 4px; }
+  .msg-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 6px; }
+  .msg-row.me { justify-content: flex-end; }
+  .msg-row .mini-avatar {
+    width: 26px; height: 26px; border-radius: 50%; background: #ccd0d5; color: #555;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .bubble { max-width: 65%; padding: 9px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
+  .msg-row.other .bubble { background: #e9eaee; color: #050505; }
+  .msg-row.me .bubble { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+  .msg-meta { font-size: 10px; color: #999; margin: 0 0 8px 40px; }
+  .msg-row.me + .msg-meta { text-align: right; margin: 0 0 8px 0; }
+  .sender-label { font-size: 11px; color: #888; margin: 6px 0 2px 34px; }
+
+  #chat-form { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid #eee; }
+  #chat-form input { flex: 1; padding: 12px 16px; border: 1px solid #ddd; border-radius: 22px; font-size: 14px; outline: none; }
+  #chat-form button {
+    background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 50%;
+    width: 42px; height: 42px; font-size: 16px; cursor: pointer; flex-shrink: 0;
+  }
+
+  /* contacts / friends */
+  #contacts-list { flex: 1; overflow-y: auto; padding: 12px; }
+  .section-title { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .03em; margin: 14px 8px 8px; }
+  .section-title:first-child { margin-top: 4px; }
+  .contact-card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; margin-bottom: 6px; }
+  .contact-card:hover { background: #f7f7f9; }
+  .contact-info { flex: 1; min-width: 0; }
+  .contact-info .cname { font-size: 14px; font-weight: 600; color: #222; }
+  .contact-info .cemail { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .friend-btn { padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; }
+  .friend-btn.add { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+  .friend-btn.added { background: #e9eaee; color: #666; }
+  .friend-btn.accept { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+  .friend-btn.decline { background: #e9eaee; color: #444; }
+  .req-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .subtabs { display: flex; border-bottom: 1px solid #eee; }
+  .subtab { flex: 1; padding: 12px 4px; background: none; border: none; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; color: #888; cursor: pointer; }
+  .subtab.active { color: #764ba2; border-bottom-color: #764ba2; }
+  .badge { display: inline-block; min-width: 16px; padding: 1px 5px; border-radius: 10px; background: #e0245e; color: white; font-size: 10px; font-weight: 700; margin-left: 3px; }
+  .badge:empty { display: none; }
+  .code-box { background: #f3ecfc; border-radius: 14px; padding: 14px; margin: 4px 0 16px; text-align: center; }
+  .code-box .cb-label { font-size: 12px; color: #777; }
+  .code-box .cb-code { font-size: 26px; font-weight: 800; letter-spacing: 4px; color: #764ba2; margin: 4px 0 8px; font-family: ui-monospace, Menlo, monospace; }
+  .code-box button { border: none; background: white; color: #764ba2; font-weight: 600; font-size: 12px; padding: 7px 16px; border-radius: 16px; cursor: pointer; }
+  .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search-row input { flex: 1; min-width: 0; padding: 12px 14px; border: 1.5px solid #e2e4e8; border-radius: 12px; font-size: 15px; letter-spacing: 2px; text-transform: uppercase; font-family: ui-monospace, Menlo, monospace; }
+  .search-row input:focus { outline: none; border-color: #764ba2; }
+  .search-row button { padding: 0 16px; border: none; border-radius: 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .empty-note { text-align: center; color: #999; font-size: 13px; margin: 20px 8px; padding: 0 12px; line-height: 1.5; }
+
+  /* admin */
+  #admin-list { flex: 1; overflow-y: auto; padding: 12px; }
+  .admin-row { padding: 12px 14px; border-radius: 12px; margin-bottom: 6px; background: #f9f9fb; display: flex; flex-direction: column; gap: 2px; }
+  .admin-row .a-name { font-size: 14px; font-weight: 700; color: #222; }
+  .admin-row .a-email { font-size: 12px; color: #555; }
+  .admin-row .a-meta { font-size: 11px; color: #999; }
+  .admin-badge { display: inline-block; background: #764ba2; color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; font-weight: 700; }
+
+  /* modals */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box { background: white; border-radius: 18px; padding: 26px 24px; width: 100%; max-width: 340px; text-align: center; }
+  .modal-box h3 { font-size: 17px; color: #222; margin-bottom: 8px; }
+  .modal-box p { font-size: 13px; color: #777; margin-bottom: 20px; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .modal-cancel { background: #f0f0f2; color: #333; }
+  .modal-confirm-danger { background: #e0245e; color: white; }
+
+  .profile-avatar-lg {
+    width: 76px; height: 76px; border-radius: 50%; margin: 0 auto 14px;
+    background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 28px;
+  }
+  .profile-field { text-align: left; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+  .profile-field .pf-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: .03em; }
+  .profile-field .pf-value { font-size: 14px; color: #222; margin-top: 2px; word-break: break-word; }
+  #close-profile-btn { margin-top: 18px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: #f0f0f2; color: #333; font-weight: 600; cursor: pointer; }
+
+  @media (max-width: 700px) {
+    .sidebar { width: 100px; }
+    .sidebar-header h2 { font-size: 15px; }
+    .me-text .email { display: none; }
+    .contact-card { flex-wrap: wrap; }
+    .req-actions { width: 100%; justify-content: flex-end; }
+    .sidebar { padding-bottom: 90px; }
+    #logout-btn { flex-direction: column; gap: 2px; font-size: 11px; padding: 12px 4px; }
+    .me-text .name { font-size: 12px; }
+    .nav-tab { flex-direction: column; gap: 4px; padding: 12px 4px; font-size: 10px; text-align: center; }
+    .nav-tab .tab-icon { font-size: 20px; }
+    .nav-tab .tab-label { white-space: normal; line-height: 1.2; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH SCREEN ============ -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <h1 id="auth-title">💬 ChatApp</h1>
+    <p class="sub" id="auth-sub">Đăng nhập bằng email để bắt đầu chat</p>
+
+    <input type="text" id="display-name" placeholder="Tên hiển thị" style="display:none;">
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Mật khẩu (tối thiểu 6 ký tự)">
+
+    <div id="auth-error"></div>
+
+    <button class="primary" id="submit-btn">Đăng nhập</button>
+    <div id="auth-loading"></div>
+
+    <div class="switch-mode" id="switch-to-signup">
+      Chưa có tài khoản? <a href="#" id="link-signup">Tạo tài khoản ngay</a>
+    </div>
+    <div class="switch-mode" id="switch-to-login" style="display:none;">
+      Đã có tài khoản? <a href="#" id="link-login">Đăng nhập</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div id="app-screen">
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-header"><h2>ChatApp</h2></div>
+      <div class="me-row">
+        <button id="profile-trigger">
+          <div class="avatar" id="my-avatar">?</div>
+          <div class="me-text">
+            <div class="name" id="my-name">—</div>
+            <div class="email" id="my-email">—</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="nav-tab active" data-tab="chat">
+        <div class="tab-icon">🌐</div><span class="tab-label">Phòng chat chung</span>
+      </div>
+      <div class="nav-tab" data-tab="contacts">
+        <div class="tab-icon">👥</div><span class="tab-label">Kết bạn</span>
+      </div>
+      <div class="nav-tab" data-tab="admin" id="admin-tab" style="display:none;">
+        <div class="tab-icon">🛡️</div><span class="tab-label">Quản trị</span>
+      </div>
+
+      <button id="logout-btn" title="Đăng xuất"><span>⏻</span><span>Đăng xuất</span></button>
+    </div>
+
+    <!-- Chat panel -->
+    <div class="panel active" id="panel-chat">
+      <div class="panel-header">
+        <div class="avatar">🌐</div>
+        <div>
+          <div class="title">Phòng chat chung</div>
+          <div class="status" id="user-count">—</div>
+        </div>
+      </div>
+      <div id="messages"></div>
+      <form id="chat-form">
+        <input type="text" id="msg-input" placeholder="Aa" autocomplete="off">
+        <button type="submit">➤</button>
+      </form>
+    </div>
+
+    <!-- Contacts panel -->
+    <div class="panel" id="panel-contacts">
+      <div class="panel-header"><div class="title">Kết bạn</div></div>
+      <div class="subtabs">
+        <button class="subtab active" data-sub="find">Tìm bạn</button>
+        <button class="subtab" data-sub="requests">Lời mời<span class="badge" id="req-badge"></span></button>
+        <button class="subtab" data-sub="friends">Bạn bè</button>
+      </div>
+      <div id="contacts-list"></div>
+    </div>
+
+    <!-- Admin panel -->
+    <div class="panel" id="panel-admin">
+      <div class="panel-header"><div class="title">Quản trị · Danh sách tài khoản</div></div>
+      <div id="admin-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LOGOUT CONFIRM MODAL ============ -->
+<div class="modal-overlay" id="logout-modal">
+  <div class="modal-box">
+    <h3>Đăng xuất?</h3>
+    <p>Bạn có chắc muốn đăng xuất khỏi ChatApp không?</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="cancel-logout">Hủy</button>
+      <button class="modal-confirm-danger" id="confirm-logout">Đăng xuất</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PROFILE MODAL ============ -->
+<div class="modal-overlay" id="profile-modal">
+  <div class="modal-box">
+    <div class="profile-avatar-lg" id="profile-avatar-lg">?</div>
+    <div class="profile-field">
+      <div class="pf-label">Tên hiển thị</div>
+      <div class="pf-value" id="profile-name">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">ID kết bạn</div>
+      <div class="pf-value" id="profile-code">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">Email</div>
+      <div class="pf-value" id="profile-email">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">Tham gia từ</div>
+      <div class="pf-value" id="profile-created">—</div>
+    </div>
+    <button id="close-profile-btn">Đóng</button>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAV-JO3UKzvWs-JZPMkEVQNuzQaFZBGH_8",
+  authDomain: "appnhantincuavua36.firebaseapp.com",
+  databaseURL: "https://appnhantincuavua36-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "appnhantincuavua36",
+  storageBucket: "appnhantincuavua36.firebasestorage.app",
+  messagingSenderId: "623265561453",
+  appId: "1:623265561453:web:f4b55902dba85082ae3864",
+  measurementId: "G-MJC2QC1FRV"
+};
+
+const ADMIN_EMAIL = "duong158209@gmail.com";
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ---------------- AUTH SCREEN LOGIC ---------------- */
+let mode = "login";
+
+const authTitle = document.getElementById("auth-title");
+const authSub = document.getElementById("auth-sub");
+const displayNameInput = document.getElementById("display-name");
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const submitBtn = document.getElementById("submit-btn");
+const switchToSignup = document.getElementById("switch-to-signup");
+const switchToLogin = document.getElementById("switch-to-login");
+const authLoading = document.getElementById("auth-loading");
+
+function showAuthError(msg) { document.getElementById("auth-error").textContent = msg; }
+function setLoading(on) { authLoading.textContent = on ? "Đang xử lý..." : ""; }
+
+function setMode(newMode) {
+  mode = newMode;
+  showAuthError("");
+  if (mode === "login") {
+    authTitle.textContent = "💬 ChatApp";
+    authSub.textContent = "Đăng nhập bằng email để bắt đầu chat";
+    displayNameInput.style.display = "none";
+    submitBtn.textContent = "Đăng nhập";
+    switchToSignup.style.display = "block";
+    switchToLogin.style.display = "none";
+  } else {
+    authTitle.textContent = "💬 Tạo tài khoản";
+    authSub.textContent = "Điền thông tin để tạo tài khoản mới";
+    displayNameInput.style.display = "block";
+    submitBtn.textContent = "Tạo tài khoản";
+    switchToSignup.style.display = "none";
+    switchToLogin.style.display = "block";
+  }
+}
+
+document.getElementById("link-signup").addEventListener("click", (e) => { e.preventDefault(); setMode("signup"); });
+document.getElementById("link-login").addEventListener("click", (e) => { e.preventDefault(); setMode("login"); });
+
+submitBtn.addEventListener("click", async () => {
+  showAuthError("");
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+  if (!email || !password) return showAuthError("Nhập email và mật khẩu.");
+
+  setLoading(true);
+  try {
+    if (mode === "login") {
+      await auth.signInWithEmailAndPassword(email, password);
+    } else {
+      const name = displayNameInput.value.trim() || email.split("@")[0];
+      if (password.length < 6) { setLoading(false); return showAuthError("Mật khẩu cần tối thiểu 6 ký tự."); }
+      const cred = await auth.createUserWithEmailAndPassword(email, password);
+      await cred.user.updateProfile({ displayName: name });
+      await db.collection("users").doc(cred.user.uid).set({
+        name: name,
+        email: email,
+        friends: [],
+        requestsSent: [],
+        requestsReceived: [],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  } catch (e) {
+    showAuthError(translateError(e.code));
+  }
+  setLoading(false);
+});
+
+function translateError(code) {
+  const map = {
+    "auth/email-already-in-use": "Email này đã được đăng ký.",
+    "auth/invalid-email": "Email không hợp lệ.",
+    "auth/weak-password": "Mật khẩu quá yếu (tối thiểu 6 ký tự).",
+    "auth/user-not-found": "Tài khoản không tồn tại.",
+    "auth/wrong-password": "Sai mật khẩu.",
+    "auth/invalid-credential": "Email hoặc mật khẩu không đúng."
+  };
+  return map[code] || ("Lỗi: " + code);
+}
+
+/* ---------------- LOGOUT CONFIRM MODAL ---------------- */
+const logoutModal = document.getElementById("logout-modal");
+document.getElementById("logout-btn").addEventListener("click", () => logoutModal.classList.add("show"));
+document.getElementById("cancel-logout").addEventListener("click", () => logoutModal.classList.remove("show"));
+document.getElementById("confirm-logout").addEventListener("click", () => {
+  logoutModal.classList.remove("show");
+  auth.signOut();
+});
+
+/* ---------------- PROFILE MODAL ---------------- */
+const profileModal = document.getElementById("profile-modal");
+document.getElementById("profile-trigger").addEventListener("click", () => {
+  if (!currentUser) return;
+  const name = currentUser.displayName || currentUser.email.split("@")[0];
+  document.getElementById("profile-avatar-lg").textContent = name.charAt(0).toUpperCase();
+  document.getElementById("profile-name").textContent = name;
+  document.getElementById("profile-email").textContent = currentUser.email;
+  document.getElementById("profile-code").textContent = (currentUserData && currentUserData.friendCode) || "—";
+  const createdDate = (currentUserData && currentUserData.createdAt)
+    ? currentUserData.createdAt.toDate()
+    : (currentUser.metadata && currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime) : null);
+  const created = createdDate ? createdDate.toLocaleString("vi-VN") : "Không rõ";
+  document.getElementById("profile-created").textContent = created;
+  profileModal.classList.add("show");
+});
+document.getElementById("close-profile-btn").addEventListener("click", () => profileModal.classList.remove("show"));
+
+/* ---------------- TAB SWITCHING ---------------- */
+document.querySelectorAll(".nav-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+    if (tab.dataset.tab === "contacts") loadContacts();
+    if (tab.dataset.tab === "admin") loadAdminList();
+  });
+});
+
+/* ---------------- SESSION HANDLING ---------------- */
+let currentUser = null;
+let currentUserData = null;
+let unsubscribeMessages = null;
+let unsubscribeUsers = null;
+let unsubscribeMe = null;
+
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    currentUser = user;
+    document.getElementById("auth-screen").style.display = "none";
+    document.getElementById("app-screen").style.display = "block";
+
+    const name = user.displayName || user.email.split("@")[0];
+    document.getElementById("my-name").textContent = name;
+    document.getElementById("my-email").textContent = user.email;
+    document.getElementById("my-avatar").textContent = name.charAt(0).toUpperCase();
+
+    await db.collection("users").doc(user.uid).set({
+      name: name,
+      email: user.email,
+      lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    let snap = await db.collection("users").doc(user.uid).get();
+    currentUserData = snap.data() || {};
+
+    // Tài khoản cũ chưa có createdAt -> lấy đúng thời gian tạo tài khoản từ Firebase Auth
+    if (!currentUserData.createdAt && user.metadata && user.metadata.creationTime) {
+      await db.collection("users").doc(user.uid).set({
+        createdAt: firebase.firestore.Timestamp.fromDate(new Date(user.metadata.creationTime))
+      }, { merge: true });
+      snap = await db.collection("users").doc(user.uid).get();
+      currentUserData = snap.data() || {};
+    }
+
+    if (user.email === ADMIN_EMAIL) {
+      document.getElementById("admin-tab").style.display = "flex";
+    }
+
+    if (!currentUserData.friendCode) {
+      const code = await generateUniqueCode();
+      await db.collection("users").doc(user.uid).set({ friendCode: code }, { merge: true });
+      currentUserData.friendCode = code;
+    }
+
+    if (unsubscribeMe) unsubscribeMe();
+    unsubscribeMe = db.collection("users").doc(user.uid).onSnapshot((doc) => {
+      const d = doc.data() || {};
+      currentUserData = Object.assign(currentUserData || {}, d);
+      updateReqBadge(d);
+      if (contactsSub === "requests" && document.getElementById("panel-contacts").classList.contains("active")) loadContacts();
+    });
+
+    listenOnlineUsers();
+    listenMessages();
+
+    setInterval(() => {
+      db.collection("users").doc(user.uid).set({
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }, 60000);
+  } else {
+    currentUser = null;
+    currentUserData = null;
+    if (unsubscribeMessages) unsubscribeMessages();
+    if (unsubscribeUsers) unsubscribeUsers();
+    if (unsubscribeMe) unsubscribeMe();
+    document.getElementById("app-screen").style.display = "none";
+    document.getElementById("auth-screen").style.display = "flex";
+    document.getElementById("admin-tab").style.display = "none";
+    emailInput.value = "";
+    passwordInput.value = "";
+    setMode("login");
+  }
+});
+
+/* ---------------- ONLINE COUNT ---------------- */
+function listenOnlineUsers() {
+  if (unsubscribeUsers) unsubscribeUsers();
+  unsubscribeUsers = db.collection("users").onSnapshot((snap) => {
+    const now = Date.now();
+    let count = 0;
+    snap.forEach(doc => {
+      const d = doc.data();
+      const lastSeen = d.lastSeen ? d.lastSeen.toMillis() : 0;
+      if (now - lastSeen < 2 * 60 * 1000) count++;
+    });
+    document.getElementById("user-count").textContent = count + " người đang hoạt động";
+  });
+}
+
+/* ---------------- CHAT ---------------- */
+function listenMessages() {
+  const messagesEl = document.getElementById("messages");
+  unsubscribeMessages = db.collection("messages")
+    .orderBy("createdAt", "asc")
+    .limitToLast(200)
+    .onSnapshot((snap) => {
+      const nearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+      messagesEl.innerHTML = "";
+      snap.forEach(doc => {
+        const m = doc.data({ serverTimestamps: "estimate" });   // tin đang gửi vẫn có giờ tạm, không bị trống
+        renderMessage(m, doc.metadata.hasPendingWrites);
+      });
+      const last = snap.docs[snap.docs.length - 1];
+      const lastIsMine = last && currentUser && last.data().uid === currentUser.uid;
+      if (nearBottom || lastIsMine) messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+}
+
+function renderMessage(m, pending) {
+  const messagesEl = document.getElementById("messages");
+  const isMe = currentUser && m.uid === currentUser.uid;
+  const time = m.createdAt ? m.createdAt.toDate().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
+
+  if (!isMe) {
+    const label = document.createElement("div");
+    label.className = "sender-label";
+    label.textContent = m.name || m.email || "Ẩn danh";
+    messagesEl.appendChild(label);
+  }
+
+  const row = document.createElement("div");
+  row.className = "msg-row " + (isMe ? "me" : "other");
+
+  if (!isMe) {
+    const mini = document.createElement("div");
+    mini.className = "mini-avatar";
+    mini.textContent = (m.name || m.email || "?").charAt(0).toUpperCase();
+    row.appendChild(mini);
+  }
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = m.text;
+  if (pending) bubble.style.opacity = "0.6";
+  row.appendChild(bubble);
+  messagesEl.appendChild(row);
+
+  const meta = document.createElement("div");
+  meta.className = "msg-meta";
+  meta.textContent = pending ? "Đang gửi…" : time;
+  meta.style.textAlign = isMe ? "right" : "left";
+  meta.style.marginLeft = isMe ? "0" : "40px";
+  messagesEl.appendChild(meta);
+}
+
+document.getElementById("chat-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("msg-input");
+  const text = input.value.trim();
+  if (!text || !currentUser) return;
+  input.value = "";
+  input.focus();
+  // Không await: tin hiện ngay trên máy mình (Firestore tự hiển thị bản chờ), gửi lên server chạy ngầm
+  db.collection("messages").add({
+    text: text,
+    uid: currentUser.uid,
+    name: currentUser.displayName || currentUser.email.split("@")[0],
+    email: currentUser.email,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {
+    input.value = text;
+    alert("Gửi tin nhắn thất bại, thử lại nhé.");
+  });
+});
+
+/* ---------------- CONTACTS / FRIENDS ---------------- */
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // bỏ O,I,0,1 cho khỏi nhầm
+function randomCode() {
+  let c = "";
+  for (let i = 0; i < 6; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return c;
+}
+async function generateUniqueCode() {
+  for (let i = 0; i < 10; i++) {
+    const c = randomCode();
+    const q = await db.collection("users").where("friendCode", "==", c).limit(1).get();
+    if (q.empty) return c;
+  }
+  return randomCode();
+}
+
+let contactsSub = "find";
+let lastSearchCode = "";
+let contactsMe = {};
+
+document.querySelectorAll(".subtab").forEach(btn => {
+  btn.addEventListener("click", () => { contactsSub = btn.dataset.sub; loadContacts(); });
+});
+
+function updateReqBadge(me) {
+  const n = ((me && me.requestsReceived) || []).length;
+  document.getElementById("req-badge").textContent = n > 0 ? n : "";
+}
+
+async function loadContacts() {
+  document.querySelectorAll(".subtab").forEach(b => b.classList.toggle("active", b.dataset.sub === contactsSub));
+  const listEl = document.getElementById("contacts-list");
+
+  const meSnap = await db.collection("users").doc(currentUser.uid).get();
+  contactsMe = meSnap.data() || {};
+  updateReqBadge(contactsMe);
+
+  if (contactsSub === "find") return renderFind(listEl);
+
+  const uids = contactsSub === "requests" ? (contactsMe.requestsReceived || []) : (contactsMe.friends || []);
+  listEl.innerHTML = '<div class="empty-note">Đang tải...</div>';
+  const docs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
+
+  listEl.innerHTML = "";
+  if (docs.length === 0) {
+    listEl.innerHTML = '<div class="empty-note">' + (contactsSub === "requests"
+      ? "Chưa có lời mời kết bạn nào."
+      : "Bạn chưa có bạn bè nào. Qua tab Tìm bạn, nhập ID để kết bạn nhé!") + '</div>';
+    return;
+  }
+  docs.forEach(d => listEl.appendChild(buildContactCard(d, contactsSub === "requests" ? "request" : "friend")));
+}
+
+function renderFind(listEl) {
+  listEl.innerHTML = "";
+  const myCode = contactsMe.friendCode || "······";
+
+  const box = document.createElement("div");
+  box.className = "code-box";
+  box.innerHTML = '<div class="cb-label">ID của bạn</div><div class="cb-code">' + escapeHtml(myCode) + '</div>';
+  const copyBtn = document.createElement("button");
+  copyBtn.textContent = "Sao chép ID";
+  copyBtn.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(myCode); copyBtn.textContent = "Đã sao chép ✓"; }
+    catch (e) { copyBtn.textContent = myCode; }
+    setTimeout(() => copyBtn.textContent = "Sao chép ID", 1500);
+  });
+  box.appendChild(copyBtn);
+  listEl.appendChild(box);
+
+  const title = document.createElement("div");
+  title.className = "section-title";
+  title.textContent = "Nhập ID để tìm bạn";
+  listEl.appendChild(title);
+
+  const row = document.createElement("div");
+  row.className = "search-row";
+  const input = document.createElement("input");
+  input.maxLength = 6; input.placeholder = "6 ký tự"; input.autocomplete = "off"; input.autocapitalize = "characters";
+  input.value = lastSearchCode;
+  const go = document.createElement("button");
+  go.textContent = "Tìm";
+  row.appendChild(input); row.appendChild(go);
+  listEl.appendChild(row);
+
+  const result = document.createElement("div");
+  result.id = "search-result";
+  listEl.appendChild(result);
+
+  const doSearch = () => { lastSearchCode = input.value.trim().toUpperCase(); runSearch(lastSearchCode, result); };
+  go.addEventListener("click", doSearch);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+  if (lastSearchCode.length === 6) runSearch(lastSearchCode, result);
+}
+
+async function runSearch(code, resultEl) {
+  const note = (t) => { resultEl.innerHTML = '<div class="empty-note">' + t + '</div>'; };
+  if (code.length !== 6) return note("ID gồm đúng 6 ký tự.");
+  if (code === contactsMe.friendCode) return note("Đây là ID của chính bạn 😄");
+  resultEl.innerHTML = '<div class="empty-note">Đang tìm...</div>';
+  try {
+    const q = await db.collection("users").where("friendCode", "==", code).limit(1).get();
+    if (q.empty) return note("Không tìm thấy ai với ID này.");
+    const doc = q.docs[0];
+    let state = "add";
+    if ((contactsMe.friends || []).includes(doc.id)) state = "friend";
+    else if ((contactsMe.requestsSent || []).includes(doc.id)) state = "sent";
+    else if ((contactsMe.requestsReceived || []).includes(doc.id)) state = "request";
+    resultEl.innerHTML = "";
+    resultEl.appendChild(buildContactCard(doc, state));
+  } catch (e) {
+    note("Không tìm được lúc này, thử lại sau.");
+  }
+}
+
+function buildContactCard(doc, state) {
+  const d = doc.data();
+  const card = document.createElement("div");
+  card.className = "contact-card";
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  avatar.textContent = (d.name || d.email || "?").charAt(0).toUpperCase();
+
+  const info = document.createElement("div");
+  info.className = "contact-info";
+  info.innerHTML = `<div class="cname">${escapeHtml(d.name || "Ẩn danh")}</div><div class="cemail">ID: ${escapeHtml(d.friendCode || "")}</div>`;
+
+  card.appendChild(avatar);
+  card.appendChild(info);
+
+  if (state === "request") {
+    const box = document.createElement("div");
+    box.className = "req-actions";
+    const ok = document.createElement("button");
+    ok.className = "friend-btn accept"; ok.textContent = "Chấp nhận";
+    ok.addEventListener("click", () => acceptRequest(doc.id, ok));
+    const no = document.createElement("button");
+    no.className = "friend-btn decline"; no.textContent = "Từ chối";
+    no.addEventListener("click", () => declineRequest(doc.id, no));
+    box.appendChild(ok); box.appendChild(no);
+    card.appendChild(box);
+    return card;
+  }
+
+  const btn = document.createElement("button");
+  if (state === "friend") {
+    btn.className = "friend-btn added"; btn.textContent = "Đã là bạn bè"; btn.disabled = true;
+  } else if (state === "sent") {
+    btn.className = "friend-btn added"; btn.textContent = "Hủy lời mời";
+    btn.addEventListener("click", () => cancelRequest(doc.id, btn));
+  } else {
+    btn.className = "friend-btn add"; btn.textContent = "+ Kết bạn";
+    btn.addEventListener("click", () => sendRequest(doc.id, btn));
+  }
+  card.appendChild(btn);
+  return card;
+}
+
+const FV = () => firebase.firestore.FieldValue;
+
+async function sendRequest(otherUid, btnEl) {
+  btnEl.disabled = true;
+  btnEl.textContent = "Đang gửi...";
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ requestsSent: FV().arrayUnion(otherUid) });
+    await db.collection("users").doc(otherUid).update({ requestsReceived: FV().arrayUnion(currentUser.uid) });
+    loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    btnEl.textContent = "+ Kết bạn";
+    alert("Không thể gửi lời mời lúc này, thử lại sau.");
+  }
+}
+
+async function cancelRequest(otherUid, btnEl) {
+  btnEl.disabled = true;
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ requestsSent: FV().arrayRemove(otherUid) });
+    await db.collection("users").doc(otherUid).update({ requestsReceived: FV().arrayRemove(currentUser.uid) });
+    loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    alert("Không thể hủy lời mời lúc này.");
+  }
+}
+
+async function acceptRequest(otherUid, btnEl) {
+  btnEl.disabled = true;
+  btnEl.textContent = "Đang xử lý...";
+  try {
+    await db.collection("users").doc(currentUser.uid).update({
+      friends: FV().arrayUnion(otherUid),
+      requestsReceived: FV().arrayRemove(otherUid)
+    });
+    await db.collection("users").doc(otherUid).update({
+      friends: FV().arrayUnion(currentUser.uid),
+      requestsSent: FV().arrayRemove(currentUser.uid)
+    });
+    loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    btnEl.textContent = "Chấp nhận";
+    alert("Không thể chấp nhận lúc này, thử lại sau.");
+  }
+}
+
+async function declineRequest(otherUid, btnEl) {
+  btnEl.disabled = true;
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ requestsReceived: FV().arrayRemove(otherUid) });
+    await db.collection("users").doc(otherUid).update({ requestsSent: FV().arrayRemove(currentUser.uid) });
+    loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    alert("Không thể từ chối lúc này.");
+  }
+}
+
+/* ---------------- ADMIN PANEL ---------------- */
+async function loadAdminList() {
+  const listEl = document.getElementById("admin-list");
+  listEl.innerHTML = '<div class="empty-note">Đang tải danh sách tài khoản...</div>';
+
+  const snap = await db.collection("users").orderBy("createdAt", "desc").get().catch(() => db.collection("users").get());
+  listEl.innerHTML = "";
+
+  if (snap.empty) {
+    listEl.innerHTML = '<div class="empty-note">Chưa có tài khoản nào.</div>';
+    return;
+  }
+
+  snap.forEach(doc => {
+    const d = doc.data();
+    const row = document.createElement("div");
+    row.className = "admin-row";
+    const created = d.createdAt ? d.createdAt.toDate().toLocaleString("vi-VN") : "Không rõ";
+    const isAdmin = d.email === ADMIN_EMAIL;
+    row.innerHTML = `
+      <div class="a-name">${escapeHtml(d.name || "Ẩn danh")}${isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}</div>
+      <div class="a-email">${escapeHtml(d.email || "")}</div>
+      <div class="a-meta">Tạo lúc: ${created} · UID: ${doc.id}</div>
+    `;
+    listEl.appendChild(row);
+  });
+}
+
+function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+</script>
+
+</body>
+</html>
