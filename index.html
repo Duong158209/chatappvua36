@@ -150,6 +150,9 @@
     align-items: center; justify-content: center; z-index: 100; padding: 20px;
   }
   .modal-overlay.show { display: flex; }
+  .mini-input { width: 100%; padding: 11px 13px; border: 1.5px solid #e2e4e8; border-radius: 10px; font-size: 14px; margin: 6px 0; background: white; }
+  .chk-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; cursor: pointer; }
+  .chk-row input { width: 18px; height: 18px; }
   .modal-box { background: white; border-radius: 18px; padding: 26px 24px; width: 100%; max-width: 340px; text-align: center; }
   .modal-box h3 { font-size: 17px; color: #222; margin-bottom: 8px; }
   .modal-box p { font-size: 13px; color: #777; margin-bottom: 20px; line-height: 1.5; }
@@ -230,6 +233,9 @@
       <div class="nav-tab" data-tab="friends">
         <div class="tab-icon">👥</div><span class="tab-label">Bạn bè</span>
       </div>
+      <div class="nav-tab" data-tab="groups">
+        <div class="tab-icon">🫂</div><span class="tab-label">Nhóm</span>
+      </div>
       <div class="nav-tab" data-tab="contacts">
         <div class="tab-icon">🔍</div><span class="tab-label">Kết bạn</span>
       </div>
@@ -262,13 +268,20 @@
         <button class="back-btn" id="dm-back" title="Quay lại">←</button>
         <div class="avatar" id="dm-avatar">?</div>
         <div><div class="title" id="dm-name">—</div></div>
-        <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat" style="margin-left:auto;">🎨</button>
+        <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh" style="margin-left:auto;">✏️</button>
+        <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat">🎨</button>
       </div>
       <div id="dm-messages"></div>
       <form id="dm-form">
         <input type="text" id="dm-input" placeholder="Aa" autocomplete="off">
         <button type="submit">➤</button>
       </form>
+    </div>
+
+    <!-- Groups panel -->
+    <div class="panel" id="panel-groups">
+      <div class="panel-header"><div class="title">Nhóm</div><button class="friend-btn add" id="new-group-btn" style="margin-left:auto;">+ Tạo nhóm</button></div>
+      <div id="groups-list" style="flex:1; overflow-y:auto; padding:12px;"></div>
     </div>
 
     <!-- Friends panel -->
@@ -316,6 +329,32 @@
     <button class="modal-btn-soft" id="theme-reset" style="width:100%; margin-top:8px;">Đặt lại mặc định</button>
     <button class="modal-btn-close" id="theme-close">Đóng</button>
     <input type="file" id="theme-input" accept="image/*" style="display:none;">
+  </div>
+</div>
+
+<!-- ============ GROUP CREATE MODAL ============ -->
+<div class="modal-overlay" id="group-modal">
+  <div class="modal-box">
+    <h3>Tạo nhóm</h3>
+    <p>Chọn ít nhất 2 bạn bè (tính cả bạn là từ 3 người trở lên).</p>
+    <input type="text" id="group-name" class="mini-input" placeholder="Tên nhóm" maxlength="40">
+    <div id="group-friends" style="max-height:220px; overflow-y:auto; margin:8px 0;"></div>
+    <div id="group-err" style="color:#e0245e; font-size:13px; min-height:16px;"></div>
+    <button class="modal-btn-primary" id="group-create" style="margin-top:0;">Tạo nhóm</button>
+    <button class="modal-btn-close" id="group-cancel">Hủy</button>
+  </div>
+</div>
+
+<!-- ============ NICKNAME MODAL ============ -->
+<div class="modal-overlay" id="nick-modal">
+  <div class="modal-box">
+    <h3>Đặt biệt danh</h3>
+    <select id="nick-target" class="mini-input"></select>
+    <input type="text" id="nick-input" class="mini-input" placeholder="Biệt danh mới" maxlength="30">
+    <button class="modal-btn-primary" id="nick-shared" style="margin-top:0;">👥 Mọi người trong cuộc trò chuyện đều thấy</button>
+    <button class="modal-btn-soft" id="nick-private" style="width:100%; margin-top:8px;">🔒 Chỉ mình tôi thấy</button>
+    <button class="modal-btn-soft" id="nick-clear" style="width:100%; margin-top:8px;">Xóa biệt danh</button>
+    <button class="modal-btn-close" id="nick-close">Đóng</button>
   </div>
 </div>
 
@@ -600,6 +639,7 @@ document.querySelectorAll(".nav-tab").forEach(tab => {
     document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
     if (tab.dataset.tab === "contacts") loadContacts();
     if (tab.dataset.tab === "friends") loadFriends();
+    if (tab.dataset.tab === "groups") listenGroups();
     if (tab.dataset.tab === "admin") loadAdminList();
   });
 });
@@ -700,6 +740,8 @@ auth.onAuthStateChanged(async (user) => {
     if (unsubscribeUsers) unsubscribeUsers();
     if (unsubscribeMe) unsubscribeMe();
     if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+    if (unsubscribeGroups) { unsubscribeGroups(); unsubscribeGroups = null; }
+    currentChat = null;
     document.getElementById("app-screen").style.display = "none";
     document.getElementById("auth-screen").style.display = "flex";
     document.getElementById("admin-tab").style.display = "none";
@@ -765,6 +807,7 @@ function renderMessage(m, pending, container, group) {
     dispName = u.name || currentFriend.name || dispName;
     if (!dispPhoto && currentFriend.doc) dispPhoto = currentFriend.doc.data().photo || "";
   }
+  if (!isMe && messagesEl.id === "dm-messages") { const nk = nickFor(m.uid); if (nk) dispName = nk; }
   const time = m.createdAt ? m.createdAt.toDate().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
 
   if (!isMe && showName) {
@@ -1030,6 +1073,10 @@ function buildContactCard(doc, state) {
 /* ---------------- FRIEND PROFILE + DM ---------------- */
 const friendModal = document.getElementById("friend-modal");
 let currentFriend = null; // { uid, name }
+let currentChat = null;   // { type: "dm"|"group", id, members? }
+let sharedNicks = {};     // biệt danh chung của cuộc trò chuyện đang mở
+let lastChatSnap = null;
+let unsubscribeGroups = null;
 
 function openFriendProfile(doc) {
   const d = doc.data();
@@ -1117,9 +1164,12 @@ function dmChatId(otherUid) {
 
 function openDM(friend) {
   currentFriend = friend;
+  currentChat = { type: "dm", id: dmChatId(friend.uid) };
+  sharedNicks = {}; lastChatSnap = null;
+  document.getElementById("dm-theme-btn").style.display = "";
   if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
   setAvatar(document.getElementById("dm-avatar"), friend.name, friend.doc && friend.doc.data().photo);
-  document.getElementById("dm-name").textContent = friend.name;
+  document.getElementById("dm-name").textContent = nickFor(friend.uid) || friend.name;
 
   // giữ tab "Bạn bè" sáng, chuyển sang panel chat riêng
   document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "friends"));
@@ -1150,6 +1200,8 @@ function openDM(friend) {
   const unsubBg = db.collection("chats").doc(dmChatId(friend.uid)).onSnapshot((doc) => {
     const d = doc.data() || {};
     applyDMBg(d.bg || "");
+    sharedNicks = d.nicks || {};
+    refreshChatTitle();
   }, () => {});
 
   unsubscribeDM = () => { unsubMsgs(); unsubBg(); };
@@ -1217,17 +1269,19 @@ document.getElementById("theme-reset").addEventListener("click", async () => {
 });
 
 document.getElementById("dm-back").addEventListener("click", () => {
-  document.querySelector('.nav-tab[data-tab="friends"]').click();
+  const isGroup = currentChat && currentChat.type === "group";
+  document.querySelector('.nav-tab[data-tab="' + (isGroup ? "groups" : "friends") + '"]').click();
 });
 
 document.getElementById("dm-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = document.getElementById("dm-input");
   const text = input.value.trim();
-  if (!text || !currentUser || !currentFriend) return;
+  if (!text || !currentUser || !currentChat) return;
   input.value = "";
   input.focus();
-  db.collection("chats").doc(dmChatId(currentFriend.uid)).collection("messages").add({
+  const msgCol = currentChat.type === "group" ? db.collection("groups").doc(currentChat.id) : db.collection("chats").doc(currentChat.id);
+  msgCol.collection("messages").add({
     text: text,
     uid: currentUser.uid,
     name: currentUser.displayName || currentUser.email.split("@")[0],
@@ -1331,6 +1385,171 @@ function escapeHtml(str) {
   d.textContent = str;
   return d.innerHTML;
 }
+
+/* ---------------- BIỆT DANH ---------------- */
+function nickFor(uid) {
+  if (!currentChat) return "";
+  const mine = ((currentUserData && currentUserData.nicks) || {})[currentChat.id] || {};
+  return mine[uid] || sharedNicks[uid] || "";
+}
+function refreshChatTitle() {
+  if (currentChat && currentChat.type === "dm" && currentFriend) {
+    document.getElementById("dm-name").textContent = nickFor(currentFriend.uid) || currentFriend.name;
+  }
+  if (currentChat && currentChat.type === "group" && lastChatSnap) renderChatSnap(lastChatSnap);
+}
+function renderChatSnap(snap) {
+  const dmEl = document.getElementById("dm-messages");
+  const nearBottom = dmEl.scrollHeight - dmEl.scrollTop - dmEl.clientHeight < 120;
+  dmEl.innerHTML = "";
+  if (snap.empty) dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
+  snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, true));
+  const last = snap.docs[snap.docs.length - 1];
+  if (nearBottom || (last && last.data().uid === currentUser.uid)) dmEl.scrollTop = dmEl.scrollHeight;
+}
+
+const nickModal = document.getElementById("nick-modal");
+function nickTargets() {
+  if (!currentChat) return [];
+  if (currentChat.type === "dm") return currentFriend ? [{ uid: currentFriend.uid, name: currentFriend.name }] : [];
+  return (currentChat.members || []).filter(u => u !== currentUser.uid).map(u => ({ uid: u, name: (usersMap[u] && usersMap[u].name) || "Ẩn danh" }));
+}
+function fillNickInput() {
+  const uid = document.getElementById("nick-target").value;
+  document.getElementById("nick-input").value = nickFor(uid);
+}
+document.getElementById("dm-nick-btn").addEventListener("click", () => {
+  const sel = document.getElementById("nick-target");
+  sel.innerHTML = "";
+  nickTargets().forEach(t => { const o = document.createElement("option"); o.value = t.uid; o.textContent = t.name; sel.appendChild(o); });
+  document.getElementById("nick-shared").textContent = currentChat && currentChat.type === "group" ? "👥 Cả nhóm đều thấy" : "👥 Cả hai đều thấy";
+  fillNickInput();
+  nickModal.classList.add("show");
+});
+document.getElementById("nick-target").addEventListener("change", fillNickInput);
+document.getElementById("nick-close").addEventListener("click", () => nickModal.classList.remove("show"));
+
+async function saveNick(mode) {   // mode: "shared" | "private" | "clear"
+  const uid = document.getElementById("nick-target").value;
+  const nick = document.getElementById("nick-input").value.trim();
+  if (!uid || !currentChat) return;
+  if (mode !== "clear" && !nick) return alert("Nhập biệt danh trước nhé.");
+  const cid = currentChat.id, del = FV().delete();
+  const chatRef = currentChat.type === "group" ? db.collection("groups").doc(cid) : db.collection("chats").doc(cid);
+  const meRef = db.collection("users").doc(currentUser.uid);
+  try {
+    if (mode === "private") {
+      await meRef.set({ nicks: { [cid]: { [uid]: nick } } }, { merge: true });
+      currentUserData.nicks = currentUserData.nicks || {};
+      currentUserData.nicks[cid] = Object.assign({}, currentUserData.nicks[cid], { [uid]: nick });
+    } else {
+      // xóa biệt danh riêng để thấy biệt danh chung
+      await meRef.set({ nicks: { [cid]: { [uid]: del } } }, { merge: true });
+      if (currentUserData.nicks && currentUserData.nicks[cid]) delete currentUserData.nicks[cid][uid];
+      await chatRef.set({ nicks: { [uid]: mode === "shared" ? nick : del } }, { merge: true });
+      if (mode === "shared") sharedNicks[uid] = nick; else delete sharedNicks[uid];
+    }
+    refreshChatTitle();
+    nickModal.classList.remove("show");
+  } catch (e) {
+    alert("Không lưu được biệt danh, kiểm tra lại rules nhé.");
+  }
+}
+document.getElementById("nick-shared").addEventListener("click", () => saveNick("shared"));
+document.getElementById("nick-private").addEventListener("click", () => saveNick("private"));
+document.getElementById("nick-clear").addEventListener("click", () => saveNick("clear"));
+
+/* ---------------- NHÓM ---------------- */
+function listenGroups() {
+  if (unsubscribeGroups) return;
+  const listEl = document.getElementById("groups-list");
+  unsubscribeGroups = db.collection("groups").where("members", "array-contains", currentUser.uid).onSnapshot((snap) => {
+    const docs = snap.docs.slice().sort((a, b) => ((b.data().createdAt && b.data().createdAt.toMillis()) || 0) - ((a.data().createdAt && a.data().createdAt.toMillis()) || 0));
+    listEl.innerHTML = "";
+    if (!docs.length) { listEl.innerHTML = '<div class="empty-note">Chưa có nhóm nào. Bấm "+ Tạo nhóm" nhé!</div>'; return; }
+    docs.forEach(d => {
+      const g = d.data();
+      const card = document.createElement("div");
+      card.className = "contact-card";
+      card.style.cursor = "pointer";
+      const av = document.createElement("div"); av.className = "avatar"; av.textContent = (g.name || "?").charAt(0).toUpperCase();
+      const info = document.createElement("div"); info.className = "cinfo"; info.style.flex = "1";
+      info.innerHTML = '<div class="cname">' + escapeHtml(g.name || "Nhóm") + '</div><div class="cemail">' + (g.members || []).length + ' thành viên</div>';
+      card.appendChild(av); card.appendChild(info);
+      card.addEventListener("click", () => openGroup(d.id, g));
+      listEl.appendChild(card);
+    });
+  }, () => { listEl.innerHTML = '<div class="empty-note">Không tải được danh sách nhóm, kiểm tra lại rules nhé.</div>'; });
+}
+
+function openGroup(id, g) {
+  if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+  currentFriend = null;
+  currentChat = { type: "group", id: id, members: g.members || [] };
+  sharedNicks = g.nicks || {}; lastChatSnap = null;
+  setAvatar(document.getElementById("dm-avatar"), g.name, "");
+  document.getElementById("dm-name").textContent = g.name || "Nhóm";
+  document.getElementById("dm-theme-btn").style.display = "none";
+  applyDMBg("");
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "groups"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("panel-dm").classList.add("active");
+  const dmEl = document.getElementById("dm-messages");
+  dmEl.innerHTML = "";
+  const ref = db.collection("groups").doc(id);
+  const u1 = ref.onSnapshot((doc) => {
+    const d = doc.data(); if (!d) return;
+    sharedNicks = d.nicks || {};
+    currentChat.members = d.members || [];
+    document.getElementById("dm-name").textContent = d.name || "Nhóm";
+    refreshChatTitle();
+  }, () => {});
+  const u2 = ref.collection("messages").orderBy("createdAt", "asc").limitToLast(200).onSnapshot((snap) => {
+    lastChatSnap = snap; renderChatSnap(snap);
+  }, () => { dmEl.innerHTML = '<div class="empty-note">Không tải được tin nhắn, kiểm tra lại quyền (rules) nhé.</div>'; });
+  unsubscribeDM = () => { u1(); u2(); };
+}
+
+const groupModal = document.getElementById("group-modal");
+document.getElementById("new-group-btn").addEventListener("click", async () => {
+  const box = document.getElementById("group-friends");
+  document.getElementById("group-name").value = "";
+  document.getElementById("group-err").textContent = "";
+  box.innerHTML = '<div class="empty-note">Đang tải...</div>';
+  groupModal.classList.add("show");
+  try {
+    const me = (await db.collection("users").doc(currentUser.uid).get()).data() || {};
+    const uids = me.friends || [];
+    box.innerHTML = "";
+    if (uids.length < 2) { box.innerHTML = '<div class="empty-note">Bạn cần có ít nhất 2 bạn bè để tạo nhóm.</div>'; return; }
+    uids.forEach(u => {
+      const row = document.createElement("label"); row.className = "chk-row";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = u;
+      const av = document.createElement("div"); av.className = "avatar"; av.style.cssText = "width:32px;height:32px;font-size:13px;";
+      const nm = (usersMap[u] && usersMap[u].name) || "Ẩn danh";
+      setAvatar(av, nm, usersMap[u] && usersMap[u].photo);
+      const t = document.createElement("span"); t.textContent = nm;
+      row.appendChild(cb); row.appendChild(av); row.appendChild(t); box.appendChild(row);
+    });
+  } catch (e) { box.innerHTML = '<div class="empty-note">Không tải được danh sách bạn bè.</div>'; }
+});
+document.getElementById("group-cancel").addEventListener("click", () => groupModal.classList.remove("show"));
+document.getElementById("group-create").addEventListener("click", async () => {
+  const err = document.getElementById("group-err");
+  const name = document.getElementById("group-name").value.trim();
+  const picked = Array.from(document.querySelectorAll("#group-friends input:checked")).map(i => i.value);
+  if (!name) return err.textContent = "Nhập tên nhóm nhé.";
+  if (picked.length < 2) return err.textContent = "Nhóm phải có ít nhất 3 người (bạn + 2 bạn bè).";
+  try {
+    const ref = await db.collection("groups").add({
+      name: name, members: [currentUser.uid].concat(picked), createdBy: currentUser.uid,
+      nicks: {}, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    groupModal.classList.remove("show");
+    const snap = await ref.get();
+    openGroup(ref.id, snap.data() || { name: name, members: [currentUser.uid].concat(picked) });
+  } catch (e) { err.textContent = "Tạo nhóm thất bại, kiểm tra lại rules nhé."; }
+});
 </script>
 
 <div id="site-credit">Web được làm bởi @HuuDuong ( vua36)</div>
