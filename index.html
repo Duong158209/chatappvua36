@@ -116,14 +116,15 @@
   }
   #chat-form button, #dm-form button {
     background: none; color: #ff3b30; border: none; border-radius: 50%;
-    width: 34px; height: 34px; font-size: 20px; cursor: pointer; flex-shrink: 0;
+    width: 36px; height: 36px; padding: 0; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
   }
-  #chat-form button.tool-btn, #dm-form button.tool-btn { background: none; color: #ff3b30; font-size: 20px; }
-  #chat-form button.like-btn, #dm-form button.like-btn { background: none; color: #ff3b30; font-size: 22px; }
-  #chat-form button.send-on, #dm-form button.send-on {
-    background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; font-size: 15px;
-  }
-  .composer-field .emoji-btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; font-size: 18px; color: #ff3b30; }
+  #chat-form button.tool-btn, #dm-form button.tool-btn,
+  #chat-form button.like-btn, #dm-form button.like-btn { background: none; color: #ff3b30; }
+  #chat-form button svg, #dm-form button svg { width: 24px; height: 24px; display: block; fill: currentColor; }
+  #chat-form button.send-on, #dm-form button.send-on { background: #0a84ff; color: #fff; width: 32px; height: 32px; }
+  #chat-form button.send-on svg, #dm-form button.send-on svg { width: 15px; height: 15px; }
+  .composer-field .emoji-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; color: #ff3b30; }
   #chat-form button.tool-btn.rec-on, #dm-form button.tool-btn.rec-on { background: #e0245e; color: #fff; animation: recpulse 1s infinite; }
   @keyframes recpulse { 50% { opacity: .65; } }
   .voice-box { display: flex; align-items: center; gap: 8px; min-width: 160px; }
@@ -2466,10 +2467,11 @@ function pickMime() {
 }
 function bindVoiceBtn(btn, where) {
   let rec = null, chunks = [], t0 = 0, timer = null, stream = null;
+  const iconHtml = btn.innerHTML;
   const stopAll = () => {
     if (timer) { clearInterval(timer); timer = null; }
     btn.classList.remove("rec-on");
-    btn.textContent = "🎤";
+    btn.innerHTML = iconHtml;
     if (stream) stream.getTracks().forEach((t) => t.stop());
     stream = null;
   };
@@ -2523,25 +2525,34 @@ function bindVoiceBtn(btn, where) {
   });
 }
 
+const ICO = {
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 4a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H8a1 1 0 110-2h3V8a1 1 0 011-1z"/></svg>',
+  cam: '<svg viewBox="0 0 24 24"><path d="M9.4 6.2L8.2 8H6a3 3 0 00-3 3v6a3 3 0 003 3h12a3 3 0 003-3v-6a3 3 0 00-3-3h-2.2l-1.2-1.8A2 2 0 0013.1 5h-2.2a2 2 0 00-1.5.7zM12 17.2A3.2 3.2 0 1112 10.8a3.2 3.2 0 010 6.4z"/></svg>',
+  gal: '<svg viewBox="0 0 24 24"><path d="M6 4h12a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3zm1.5 12.2l3.2-4.1a1 1 0 011.6 0l2.1 2.7 1-1.2a1 1 0 011.5.1L18 16.2H7.5zM9 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>',
+  mic: '<svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 00-3 3v6a3 3 0 106 0V6a3 3 0 00-3-3zm-7 9a1 1 0 012 0 5 5 0 0010 0 1 1 0 112 0 7 7 0 01-6 6.9V21a1 1 0 11-2 0v-2.1A7 7 0 015 12z"/></svg>',
+  smile: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-3.2 8.2a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4zm6.4 0a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4zM12 17.4c-2.2 0-3.8-1.4-4.3-2.8a.8.8 0 011.5-.5c.3.8 1.4 1.7 2.8 1.7s2.5-.9 2.8-1.7a.8.8 0 011.5.5c-.5 1.4-2.1 2.8-4.3 2.8z"/></svg>',
+  like: '<svg viewBox="0 0 24 24"><path d="M14.6 8V5.2A2.2 2.2 0 0012.4 3h-.3l-1.6 4.8H7.2A2.2 2.2 0 005 10v8.2A2.2 2.2 0 007.2 20.4H16a3 3 0 002.9-2.3l1.3-5.2A2.2 2.2 0 0018 10.2h-3.4V8zM8.4 18.6H7.2a.4.4 0 01-.4-.4V10.2c0-.2.2-.4.4-.4h1.2v8.8z"/></svg>',
+  send: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3.4 11.2l16.2-7.2a1 1 0 011.3 1.3l-7.2 16.2a1 1 0 01-1.9.1L10 14.2 4.4 12.4a1 1 0 01-.1-1.9z"/></svg>'
+};
 function setupComposer(formId, inputId, where) {
   const form = document.getElementById(formId), input = document.getElementById(inputId);
   const sendBtn = form.querySelector('button[type="submit"]');
   sendBtn.className = "like-btn";
-  sendBtn.textContent = "👍";
+  sendBtn.innerHTML = ICO.like;
   sendBtn.title = "Like";
   const wrap = document.createElement("div");
   wrap.className = "composer-field";
   form.insertBefore(wrap, input);
   wrap.appendChild(input);
-  const mk = (label, title, cls) => {
+  const mk = (svg, title, cls) => {
     const b = document.createElement("button");
-    b.type = "button"; b.className = "tool-btn " + (cls || ""); b.textContent = label; b.title = title;
+    b.type = "button"; b.className = "tool-btn " + (cls || ""); b.innerHTML = svg; b.title = title;
     form.insertBefore(b, wrap);
     return b;
   };
-  const plusBtn = mk("+", "Tệp", ""), camBtn = mk("📷", "Chụp ảnh", ""), galBtn = mk("🖼️", "Thư viện", ""), micBtn = mk("🎙️", "Tin thoại", "");
+  const plusBtn = mk(ICO.plus, "Tệp", ""), camBtn = mk(ICO.cam, "Chụp ảnh", ""), galBtn = mk(ICO.gal, "Thư viện", ""), micBtn = mk(ICO.mic, "Tin thoại", "");
   const emojiBtn = document.createElement("button");
-  emojiBtn.type = "button"; emojiBtn.className = "tool-btn emoji-btn"; emojiBtn.textContent = "😊"; emojiBtn.title = "Icon";
+  emojiBtn.type = "button"; emojiBtn.className = "tool-btn emoji-btn"; emojiBtn.innerHTML = ICO.smile; emojiBtn.title = "Icon";
   wrap.appendChild(emojiBtn);
 
   const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.accept = "*/*"; fileIn.style.display = "none";
@@ -2552,7 +2563,7 @@ function setupComposer(formId, inputId, where) {
   const syncSend = () => {
     const has = !!(input.value || "").trim();
     sendBtn.className = has ? "send-on" : "like-btn";
-    sendBtn.textContent = has ? "➤" : "👍";
+    sendBtn.innerHTML = has ? ICO.send : ICO.like;
     sendBtn.title = has ? "Gửi" : "Like";
   };
   input.addEventListener("input", syncSend);
