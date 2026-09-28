@@ -183,6 +183,45 @@
   .profile-field .pf-value { font-size: 14px; color: #222; margin-top: 2px; word-break: break-word; }
   #close-profile-btn { margin-top: 18px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: #f0f0f2; color: #333; font-weight: 600; cursor: pointer; }
 
+
+  /* ---------- FULLSCREEN CHAT (Messenger-style) ---------- */
+  #app-screen.chat-focus .sidebar { display: none !important; }
+  #app-screen.chat-focus .layout { height: 100%; }
+  #app-screen.chat-focus .panel.active {
+    position: fixed; left: 0; right: 0; top: 0;
+    height: calc(100dvh - 28px); height: calc(100vh - 28px);
+    z-index: 200; background: #fff;
+  }
+  #app-screen.chat-focus .panel-header {
+    padding: 10px 12px;
+    background: #fff;
+    box-shadow: 0 1px 0 rgba(0,0,0,.06);
+  }
+  .msg-row { position: relative; }
+  .msg-row .bubble { cursor: pointer; }
+  .recalled-bubble {
+    background: transparent !important;
+    color: #888 !important;
+    border: 1px dashed #ccc;
+    font-style: italic;
+    font-size: 13px;
+  }
+  .msg-row.me .recalled-bubble { color: #666 !important; }
+  #msg-action {
+    display: none; position: fixed; z-index: 800;
+    background: #fff; border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.22);
+    min-width: 220px; overflow: hidden;
+  }
+  #msg-action.show { display: block; }
+  #msg-action button {
+    display: block; width: 100%; text-align: left;
+    border: none; background: none; padding: 12px 16px;
+    font-size: 14px; cursor: pointer; color: #222;
+  }
+  #msg-action button:hover { background: #f5f3fb; }
+  #msg-action button.danger { color: #e0245e; font-weight: 600; }
+
   @media (max-width: 700px) {
     .sidebar { width: 100px; }
     .sidebar-header h2 { font-size: 15px; }
@@ -450,6 +489,10 @@
   </div>
 </div>
 
+<div id="msg-action">
+  <button type="button" id="ma-me">Ẩn với mình</button>
+  <button type="button" id="ma-all" class="danger">Thu hồi với mọi người</button>
+</div>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyAV-JO3UKzvWs-JZPMkEVQNuzQaFZBGH_8",
@@ -666,6 +709,7 @@ document.querySelectorAll(".nav-tab").forEach(tab => {
     document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
     tab.classList.add("active");
     document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+    document.getElementById("app-screen").classList.toggle("chat-focus", tab.dataset.tab === "chat");
     if (tab.dataset.tab === "contacts") loadContacts();
     if (tab.dataset.tab === "friends") loadFriends();
     if (tab.dataset.tab === "groups") listenGroups();
@@ -771,6 +815,7 @@ auth.onAuthStateChanged(async (user) => {
     if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
     if (unsubscribeGroups) { unsubscribeGroups(); unsubscribeGroups = null; }
     currentChat = null;
+    document.getElementById("app-screen").classList.remove("chat-focus");
     document.getElementById("app-screen").style.display = "none";
     document.getElementById("auth-screen").style.display = "flex";
     document.getElementById("admin-tab").style.display = "none";
@@ -807,7 +852,7 @@ function renderPublic(snap) {
   messagesEl.innerHTML = "";
   snap.forEach(doc => {
     const m = doc.data({ serverTimestamps: "estimate" });   // tin đang gửi vẫn có giờ tạm, không bị trống
-    renderMessage(m, doc.metadata.hasPendingWrites);
+    renderMessage(m, doc.metadata.hasPendingWrites, null, true, doc.id, "public");
   });
   const last = snap.docs[snap.docs.length - 1];
   const lastIsMine = last && currentUser && last.data().uid === currentUser.uid;
@@ -824,22 +869,29 @@ function listenMessages() {
     });
 }
 
-function renderMessage(m, pending, container, group) {
+function messageColRef(scope) {
+  if (scope === "public") return db.collection("messages");
+  if (!currentChat) return null;
+  const root = currentChat.type === "group" ? db.collection("groups") : db.collection("chats");
+  return root.doc(currentChat.id).collection("messages");
+}
+
+function renderMessage(m, pending, container, group, msgId, scope) {
   const messagesEl = container || document.getElementById("messages");
+  if (currentUser && Array.isArray(m.deletedFor) && m.deletedFor.indexOf(currentUser.uid) >= 0) return;
   const showName = group !== false;
   const isMe = currentUser && m.uid === currentUser.uid;
   const u = usersMap[m.uid] || {};
   let dispName = u.name || m.name || "Ẩn danh";
   let dispPhoto = u.photo || "";
   if (!isMe && group === false && currentFriend && currentFriend.uid === m.uid) {
-    // khung chat riêng: dùng thông tin của người bạn đang chat nếu chưa có trong usersMap
     dispName = u.name || currentFriend.name || dispName;
     if (!dispPhoto && currentFriend.doc) dispPhoto = currentFriend.doc.data().photo || "";
   }
   if (!isMe && messagesEl.id === "dm-messages") { const nk = nickFor(m.uid); if (nk) dispName = nk; }
   const time = m.createdAt ? m.createdAt.toDate().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
 
-  if (!isMe && showName) {
+  if (!isMe && showName && !m.recalled) {
     const label = document.createElement("div");
     label.className = "sender-label";
     label.textContent = dispName;
@@ -858,11 +910,14 @@ function renderMessage(m, pending, container, group) {
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  if (m.type === "image" && m.image) {
+  if (m.recalled) {
+    bubble.className = "bubble recalled-bubble";
+    bubble.textContent = isMe ? "Bạn đã thu hồi một tin nhắn" : "Tin nhắn đã được thu hồi";
+  } else if (m.type === "image" && m.image) {
     bubble.style.padding = "4px";
     const im = document.createElement("img");
     im.className = "chat-img"; im.src = m.image; im.alt = "Ảnh";
-    im.addEventListener("click", () => { document.getElementById("lightbox-img").src = m.image; document.getElementById("lightbox").classList.add("show"); });
+    im.addEventListener("click", (ev) => { ev.stopPropagation(); document.getElementById("lightbox-img").src = m.image; document.getElementById("lightbox").classList.add("show"); });
     bubble.appendChild(im);
   } else if (m.type === "file" && (m.fileData || m.fileURL)) {
     const a = document.createElement("a");
@@ -878,16 +933,69 @@ function renderMessage(m, pending, container, group) {
     bubble.textContent = m.text;
   }
   if (pending) bubble.style.opacity = "0.6";
+  if (msgId && !m.recalled) {
+    bubble.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      openMsgAction(ev, { id: msgId, scope: scope || (messagesEl.id === "dm-messages" ? "dm" : "public"), isMe: !!isMe, uid: m.uid });
+    });
+  }
   row.appendChild(bubble);
   messagesEl.appendChild(row);
 
   const meta = document.createElement("div");
   meta.className = "msg-meta";
-  meta.textContent = pending ? "Đang gửi…" : time;
+  meta.textContent = pending ? "Đang gửi…" : (m.recalled ? "Đã thu hồi" : time);
   meta.style.textAlign = isMe ? "right" : "left";
   meta.style.marginLeft = isMe ? "0" : "40px";
   messagesEl.appendChild(meta);
 }
+
+let msgActionTarget = null;
+function openMsgAction(ev, info) {
+  msgActionTarget = info;
+  const menu = document.getElementById("msg-action");
+  document.getElementById("ma-all").style.display = info.isMe ? "block" : "none";
+  document.getElementById("ma-me").textContent = info.isMe ? "Thu hồi với mình" : "Ẩn với mình";
+  menu.classList.add("show");
+  const w = 230, h = info.isMe ? 96 : 52;
+  let x = ev.clientX, y = ev.clientY;
+  if (x + w > window.innerWidth - 8) x = window.innerWidth - w - 8;
+  if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  menu.style.left = Math.max(8, x) + "px";
+  menu.style.top = Math.max(8, y) + "px";
+}
+document.addEventListener("click", () => {
+  const menu = document.getElementById("msg-action");
+  if (menu) menu.classList.remove("show");
+});
+
+async function recallForMe() {
+  if (!msgActionTarget || !currentUser) return;
+  const col = messageColRef(msgActionTarget.scope === "public" ? "public" : "dm");
+  if (!col) return;
+  try {
+    await col.doc(msgActionTarget.id).update({ deletedFor: FV().arrayUnion(currentUser.uid) });
+  } catch (e) { alert("Không ẩn được tin nhắn lúc này."); }
+}
+async function recallForAll() {
+  if (!msgActionTarget || !msgActionTarget.isMe) return;
+  if (!confirm("Thu hồi tin nhắn này với tất cả mọi người?")) return;
+  const col = messageColRef(msgActionTarget.scope === "public" ? "public" : "dm");
+  if (!col) return;
+  try {
+    await col.doc(msgActionTarget.id).update({
+      recalled: true,
+      text: "",
+      type: "text",
+      image: FV().delete(),
+      fileData: FV().delete(),
+      fileURL: FV().delete()
+    });
+  } catch (e) { alert("Không thu hồi được. Kiểm tra quyền Firestore nhé."); }
+}
+document.getElementById("ma-me").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("msg-action").classList.remove("show"); recallForMe(); });
+document.getElementById("ma-all").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("msg-action").classList.remove("show"); recallForAll(); });
+
 
 document.getElementById("chat-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1223,6 +1331,7 @@ function openDM(friend) {
   document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "friends"));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.getElementById("panel-dm").classList.add("active");
+  document.getElementById("app-screen").classList.add("chat-focus");
 
   const dmEl = document.getElementById("dm-messages");
   dmEl.innerHTML = "";
@@ -1236,7 +1345,7 @@ function openDM(friend) {
       if (snap.empty) {
         dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
       }
-      snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, false));
+      snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, false, doc.id, "dm"));
       const last = snap.docs[snap.docs.length - 1];
       const lastIsMine = last && last.data().uid === currentUser.uid;
       if (nearBottom || lastIsMine) dmEl.scrollTop = dmEl.scrollHeight;
@@ -1317,6 +1426,7 @@ document.getElementById("theme-reset").addEventListener("click", async () => {
 });
 
 document.getElementById("dm-back").addEventListener("click", () => {
+  document.getElementById("app-screen").classList.remove("chat-focus");
   const isGroup = currentChat && currentChat.type === "group";
   document.querySelector('.nav-tab[data-tab="' + (isGroup ? "groups" : "friends") + '"]').click();
 });
@@ -1451,7 +1561,7 @@ function renderChatSnap(snap) {
   const nearBottom = dmEl.scrollHeight - dmEl.scrollTop - dmEl.clientHeight < 120;
   dmEl.innerHTML = "";
   if (snap.empty) dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
-  snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, true));
+  snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, true, doc.id, "dm"));
   const last = snap.docs[snap.docs.length - 1];
   if (nearBottom || (last && last.data().uid === currentUser.uid)) dmEl.scrollTop = dmEl.scrollHeight;
 }
@@ -1544,6 +1654,7 @@ function openGroup(id, g) {
   document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "groups"));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.getElementById("panel-dm").classList.add("active");
+  document.getElementById("app-screen").classList.add("chat-focus");
   const dmEl = document.getElementById("dm-messages");
   dmEl.innerHTML = "";
   const ref = db.collection("groups").doc(id);
@@ -1744,6 +1855,7 @@ function uploadBigFile(file, where) {
     });
 }
 </script>
+
 
 <div id="site-credit">Web được làm bởi @HuuDuong ( vua36)</div>
 </body>
