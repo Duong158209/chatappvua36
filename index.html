@@ -1005,6 +1005,9 @@ document.getElementById("remove-photo-btn").addEventListener("click", async () =
 document.querySelectorAll(".nav-tab").forEach(tab => {
   tab.addEventListener("click", () => {
     if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+    if (unsubscribeChatMeta) { unsubscribeChatMeta(); unsubscribeChatMeta = null; }
+    currentChat = null;
+    currentFriend = null;
     document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
     document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
     tab.classList.add("active");
@@ -1260,13 +1263,16 @@ function appendSeenAvatars(container, lastMs, reads) {
   if (n) container.appendChild(row);
 }
 let lastReadBump = 0;
+function isLookingAtChat() {
+  return document.visibilityState === "visible" && document.getElementById("app-screen") && document.getElementById("app-screen").classList.contains("chat-focus");
+}
 function bumpReadNow() {
   const now = Date.now();
   if (now - lastReadBump < 2500) return;
+  if (!isLookingAtChat()) return;
   lastReadBump = now;
-  if (document.visibilityState !== "visible") return;
   if (document.getElementById("panel-dm") && document.getElementById("panel-dm").classList.contains("active") && currentChat) markChatRead();
-  if (document.getElementById("panel-chat") && document.getElementById("panel-chat").classList.contains("active")) markWorldRead();
+  else if (document.getElementById("panel-chat") && document.getElementById("panel-chat").classList.contains("active")) markWorldRead();
 }
 
 const seenNotify = {};
@@ -2081,15 +2087,8 @@ function openDM(friend) {
       snap.docChanges().forEach((ch) => {
         if (ch.type === "added") notifyIncoming(ch.doc.id, ch.doc.data(), friend.name, dmChatId(friend.uid));
       });
-      const nearBottom = dmEl.scrollHeight - dmEl.scrollTop - dmEl.clientHeight < 120;
-      dmEl.innerHTML = "";
-      if (snap.empty) {
-        dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
-      }
-      snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, false, doc.id, "dm"));
-      const last = snap.docs[snap.docs.length - 1];
-      const lastIsMine = last && last.data().uid === currentUser.uid;
-      if (nearBottom || lastIsMine) dmEl.scrollTop = dmEl.scrollHeight;
+      lastChatSnap = snap;
+      renderChatSnap(snap);
     }, () => {
       dmEl.innerHTML = '<div class="empty-note">Không tải được tin nhắn, kiểm tra lại quyền (rules) nhé.</div>';
     });
