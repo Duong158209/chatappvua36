@@ -328,6 +328,10 @@
   body.dark .sidebar { background: #111114; border-right-color: #2c2c2e; }
   body.dark .sidebar-header { border-bottom-color: #2c2c2e; }
   body.dark .sidebar-header h2, body.dark .me-text .name, body.dark .nav-tab, body.dark .panel-header .title { color: #f2f2f7; }
+  body.dark #app-screen.chat-focus .panel-header { background: #111114 !important; box-shadow: 0 1px 0 #2c2c2e; }
+  body.dark #dm-name { color: #ffffff !important; opacity: 1; }
+  body.dark .back-btn { color: #c8b0ff; }
+  body.dark #dm-status { color: #30d158; }
   body.dark .me-row, body.dark .sidebar-header { border-bottom-color: #2c2c2e; }
   body.dark .me-text .email { color: #8e8e93; }
   body.dark .nav-tab:hover, body.dark .nav-tab.active { background: #2c2240; }
@@ -1150,8 +1154,14 @@ function unlockAudio() {
   audioUnlocked = true;
   try { playBeep(0.01); } catch (e) {}
 }
-document.addEventListener("click", unlockAudio, { once: true });
-document.addEventListener("touchstart", unlockAudio, { once: true });
+document.addEventListener("click", unlockAudio);
+document.addEventListener("touchstart", unlockAudio);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    notifyReady = true;
+    unlockAudio();
+  }
+});
 function playBeep(sec) {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
@@ -1173,9 +1183,8 @@ function playNotifySound() {
   playBeep();
 }
 function viewingChat(chatKey) {
-  if (!document.hasFocus()) return false;
-  if (chatKey === "public") return document.getElementById("panel-chat").classList.contains("active");
-  return !!(currentChat && currentChat.id === chatKey && document.getElementById("panel-dm").classList.contains("active"));
+  if (chatKey === "public") return document.getElementById("panel-chat") && document.getElementById("panel-chat").classList.contains("active") && document.visibilityState === "visible";
+  return !!(document.visibilityState === "visible" && currentChat && currentChat.id === chatKey && document.getElementById("panel-dm") && document.getElementById("panel-dm").classList.contains("active"));
 }
 function showAppToast(title, body) {
   const el = document.getElementById("app-toast");
@@ -1190,7 +1199,10 @@ function notifyIncoming(id, m, title, chatKey) {
   seenNotify[id] = 1;
   if (!notifyReady || !currentUser || !m) return;
   if (m.uid === currentUser.uid || m.recalled || m.type === "recalled") return;
+  const ts = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : Date.now();
+  if (Date.now() - ts > 30000) return;
   if (viewingChat(chatKey)) return;
+  try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
   const body = m.type === "image" ? "Đã gửi một ảnh" : m.type === "voice" ? "Đã gửi tin thoại" : m.type === "file" ? "Đã gửi một tệp" : (m.text || "Tin nhắn mới");
   playNotifySound();
   showAppToast(title || "Raumania", body);
