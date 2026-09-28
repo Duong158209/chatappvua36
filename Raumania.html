@@ -1,0 +1,1862 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raumania</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  body { background: #f0f2f5; height: 100vh; overflow: hidden; }
+
+  /* ---------- AUTH SCREEN ---------- */
+  #auth-screen {
+    display: flex; align-items: center; justify-content: center;
+    height: calc(100vh - 28px); height: calc(100dvh - 28px); background: linear-gradient(135deg, #667eea, #764ba2); padding: 16px;
+  }
+  .auth-box { background: white; width: 100%; max-width: 380px; border-radius: 20px; padding: 36px 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .auth-box h1 { text-align: center; font-size: 26px; color: #222; margin-bottom: 6px; }
+  .auth-box p.sub { text-align: center; font-size: 13px; color: #888; margin-bottom: 24px; }
+  .auth-box input { width: 100%; padding: 13px 15px; border: 1.5px solid #e2e4e8; border-radius: 12px; font-size: 14px; margin-bottom: 12px; }
+  .auth-box input:focus { outline: none; border-color: #764ba2; }
+  .auth-box button.primary {
+    width: 100%; padding: 13px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700;
+    cursor: pointer; background: linear-gradient(135deg, #667eea, #764ba2); color: white; margin-top: 4px;
+  }
+  .switch-mode { text-align: center; font-size: 13px; color: #666; margin-top: 18px; }
+  .switch-mode a { color: #764ba2; font-weight: 600; text-decoration: none; }
+  #auth-error { color: #e0245e; font-size: 13px; text-align: center; min-height: 18px; margin: 6px 0; }
+  #auth-loading { text-align: center; font-size: 13px; color: #888; min-height: 16px; }
+
+  /* ---------- MAIN APP ---------- */
+  #app-screen { display: none; height: calc(100vh - 28px); height: calc(100dvh - 28px); }
+  #site-credit { position: fixed; left: 0; right: 0; bottom: 0; height: 28px; z-index: 9999; display: flex; align-items: center; justify-content: center; background: #1f1f2e; color: rgba(255,255,255,.85); font-size: 12px; text-align: center; padding: 0 8px; }
+  .layout { display: flex; height: 100%; }
+
+  .sidebar { width: 220px; background: white; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; }
+  .sidebar-header { padding: 16px; border-bottom: 1px solid #eee; }
+  .sidebar-header h2 { font-size: 18px; color: #050505; }
+
+  .me-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #f0f0f0; }
+  #profile-trigger { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; background: none; border: none; text-align: left; padding: 0; }
+  #profile-trigger:active { opacity: 0.7; }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0;
+  }
+  .me-text { min-width: 0; }
+  .me-text .name { font-size: 14px; font-weight: 600; color: #050505; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me-text .email { font-size: 11px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #logout-btn {
+    margin-top: auto; border: none; border-top: 1px solid #eee; background: none; color: #e0245e;
+    font-size: 14px; font-weight: 600; cursor: pointer; padding: 14px 16px;
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  #logout-btn:active { background: #fbe9ee; }
+
+  .nav-tab { padding: 13px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-left: 3px solid transparent; font-size: 14px; color: #444; }
+  .nav-tab.active { background: #f3ecfc; border-left-color: #764ba2; color: #222; font-weight: 600; }
+  .nav-tab .tab-icon { font-size: 18px; width: 22px; text-align: center; flex-shrink: 0; }
+  .nav-tab .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .panel { flex: 1; display: none; flex-direction: column; background: #fff; overflow: hidden; }
+  .panel.active { display: flex; }
+  .panel-header { padding: 14px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; }
+  .panel-header .title { font-size: 16px; font-weight: 600; color: #050505; }
+  .panel-header .status { font-size: 12px; color: #31a24c; }
+
+  /* chat */
+  #messages, #dm-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 4px; }
+  .msg-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 6px; }
+  .msg-row.me { justify-content: flex-end; }
+  .msg-row .mini-avatar {
+    width: 26px; height: 26px; border-radius: 50%; background: #ccd0d5; color: #555;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .bubble { max-width: 65%; padding: 9px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
+  .msg-row.other .bubble { background: #e9eaee; color: #050505; }
+  .msg-row.me .bubble { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+  .msg-meta { font-size: 10px; color: #999; margin: 0 0 8px 40px; }
+  .msg-row.me + .msg-meta { text-align: right; margin: 0 0 8px 0; }
+  .sender-label { font-size: 11px; color: #888; margin: 6px 0 2px 34px; }
+
+  #chat-form, #dm-form { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid #eee; }
+  #chat-form input, #dm-form input { flex: 1; padding: 12px 16px; border: 1px solid #ddd; border-radius: 22px; font-size: 14px; outline: none; }
+  #chat-form button, #dm-form button {
+    background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 50%;
+    width: 42px; height: 42px; font-size: 16px; cursor: pointer; flex-shrink: 0;
+  }
+
+  #chat-form button.tool-btn, #dm-form button.tool-btn { background: #f0f0f2; color: #333; font-size: 18px; }
+  #emoji-pop { display: none; position: fixed; z-index: 500; background: white; border: 1px solid #e4e6eb; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.2); padding: 8px; width: 264px; max-height: 210px; overflow-y: auto; flex-wrap: wrap; }
+  #emoji-pop.show { display: flex; }
+  #emoji-pop span { width: 33px; height: 33px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; border-radius: 8px; }
+  #emoji-pop span:hover { background: #f0f0f2; }
+  .bubble img.chat-img { display: block; max-width: 100%; max-height: 260px; border-radius: 14px; cursor: zoom-in; }
+  .bubble a.chat-file { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+  .bubble a.chat-file .fn { font-weight: 600; word-break: break-all; }
+  .bubble a.chat-file .fs { font-size: 11px; opacity: .75; }
+  #lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+
+  /* contacts / friends */
+  #contacts-list { flex: 1; overflow-y: auto; padding: 12px; }
+  .section-title { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .03em; margin: 14px 8px 8px; }
+  .section-title:first-child { margin-top: 4px; }
+  .contact-card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; margin-bottom: 6px; }
+  .contact-card:hover { background: #f7f7f9; }
+  .contact-info { flex: 1; min-width: 0; }
+  .contact-info .cname { font-size: 14px; font-weight: 600; color: #222; }
+  .contact-info .cemail { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .friend-btn { padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; }
+  .friend-btn.add { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+  .friend-btn.added { background: #e9eaee; color: #666; }
+  .friend-btn.accept { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+  .friend-btn.decline { background: #e9eaee; color: #444; }
+  .req-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .subtabs { display: flex; border-bottom: 1px solid #eee; }
+  .subtab { flex: 1; padding: 12px 4px; background: none; border: none; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; color: #888; cursor: pointer; }
+  .subtab.active { color: #764ba2; border-bottom-color: #764ba2; }
+  .badge { display: inline-block; min-width: 16px; padding: 1px 5px; border-radius: 10px; background: #e0245e; color: white; font-size: 10px; font-weight: 700; margin-left: 3px; }
+  .badge:empty { display: none; }
+  .code-box { background: #f3ecfc; border-radius: 14px; padding: 14px; margin: 4px 0 16px; text-align: center; }
+  .code-box .cb-label { font-size: 12px; color: #777; }
+  .code-box .cb-code { font-size: 26px; font-weight: 800; letter-spacing: 4px; color: #764ba2; margin: 4px 0 8px; font-family: ui-monospace, Menlo, monospace; }
+  .code-box button { border: none; background: white; color: #764ba2; font-weight: 600; font-size: 12px; padding: 7px 16px; border-radius: 16px; cursor: pointer; }
+  .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search-row input { flex: 1; min-width: 0; padding: 12px 14px; border: 1.5px solid #e2e4e8; border-radius: 12px; font-size: 15px; letter-spacing: 2px; text-transform: uppercase; font-family: ui-monospace, Menlo, monospace; }
+  .search-row input:focus { outline: none; border-color: #764ba2; }
+  .search-row button { padding: 0 16px; border: none; border-radius: 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .modal-btn-primary { margin-top: 18px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: 700; font-size: 14px; cursor: pointer; }
+  .modal-btn-close { margin-top: 8px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: #f0f0f2; color: #333; font-weight: 600; cursor: pointer; }
+  #messages, #dm-messages {
+    background: linear-gradient(rgba(8,16,28,.30), rgba(8,16,28,.30)), url(data:image/jpeg;base64,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) center / cover no-repeat;
+  }
+  #messages .msg-meta, #dm-messages .msg-meta, #messages .sender-label, #dm-messages .sender-label { color: rgba(255,255,255,.78); }
+  #dm-messages .empty-note { color: rgba(255,255,255,.85); }
+  #messages .msg-row.other .bubble, #dm-messages .msg-row.other .bubble { background: rgba(255,255,255,.92); }
+  .avatar-edit { position: relative; cursor: pointer; }
+  .modal-row { display: flex; gap: 8px; margin-top: 8px; }
+  .modal-btn-soft { flex: 1; padding: 12px 6px; border-radius: 10px; border: none; background: #f0f0f2; color: #444; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .modal-btn-danger { flex: 1; padding: 12px 6px; border-radius: 10px; border: none; background: #fbe9ee; color: #e0245e; font-weight: 600; font-size: 13px; cursor: pointer; }
+  #dm-avatar, #dm-name { cursor: pointer; }
+  .chev { color: #bbb; font-size: 22px; padding: 0 6px; }
+  .back-btn { border: none; background: none; font-size: 22px; cursor: pointer; color: #764ba2; padding: 0 4px; }
+  .empty-note { text-align: center; color: #999; font-size: 13px; margin: 20px 8px; padding: 0 12px; line-height: 1.5; }
+
+  /* admin */
+  #admin-list { flex: 1; overflow-y: auto; padding: 12px; }
+  .admin-row { padding: 12px 14px; border-radius: 12px; margin-bottom: 6px; background: #f9f9fb; display: flex; flex-direction: column; gap: 2px; }
+  .admin-row .a-name { font-size: 14px; font-weight: 700; color: #222; }
+  .admin-row .a-email { font-size: 12px; color: #555; }
+  .admin-row .a-meta { font-size: 11px; color: #999; }
+  .admin-badge { display: inline-block; background: #764ba2; color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; font-weight: 700; }
+
+  /* modals */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .mini-input { width: 100%; padding: 11px 13px; border: 1.5px solid #e2e4e8; border-radius: 10px; font-size: 14px; margin: 6px 0; background: white; }
+  .chk-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; cursor: pointer; }
+  .chk-row input { width: 18px; height: 18px; }
+  .modal-box { background: white; border-radius: 18px; padding: 26px 24px; width: 100%; max-width: 340px; text-align: center; }
+  .modal-box h3 { font-size: 17px; color: #222; margin-bottom: 8px; }
+  .modal-box p { font-size: 13px; color: #777; margin-bottom: 20px; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .modal-cancel { background: #f0f0f2; color: #333; }
+  .modal-confirm-danger { background: #e0245e; color: white; }
+
+  .profile-avatar-lg {
+    width: 76px; height: 76px; border-radius: 50%; margin: 0 auto 14px;
+    background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 28px;
+  }
+  .profile-field { text-align: left; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+  .profile-field .pf-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: .03em; }
+  .profile-field .pf-value { font-size: 14px; color: #222; margin-top: 2px; word-break: break-word; }
+  #close-profile-btn { margin-top: 18px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: #f0f0f2; color: #333; font-weight: 600; cursor: pointer; }
+
+
+  /* ---------- FULLSCREEN CHAT (Messenger-style) ---------- */
+  #app-screen.chat-focus .sidebar { display: none !important; }
+  #app-screen.chat-focus .layout { height: 100%; }
+  #app-screen.chat-focus .panel.active {
+    position: fixed; left: 0; right: 0; top: 0;
+    height: calc(100dvh - 28px); height: calc(100vh - 28px);
+    z-index: 200; background: #fff;
+  }
+  #app-screen.chat-focus .panel-header {
+    padding: 10px 12px;
+    background: #fff;
+    box-shadow: 0 1px 0 rgba(0,0,0,.06);
+  }
+  .msg-row { position: relative; }
+  .msg-row .bubble { cursor: pointer; }
+  .recalled-bubble {
+    background: transparent !important;
+    color: #888 !important;
+    border: 1px dashed #ccc;
+    font-style: italic;
+    font-size: 13px;
+  }
+  .msg-row.me .recalled-bubble { color: #666 !important; }
+  #msg-action {
+    display: none; position: fixed; z-index: 800;
+    background: #fff; border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.22);
+    min-width: 220px; overflow: hidden;
+  }
+  #msg-action.show { display: block; }
+  #msg-action button {
+    display: block; width: 100%; text-align: left;
+    border: none; background: none; padding: 12px 16px;
+    font-size: 14px; cursor: pointer; color: #222;
+  }
+  #msg-action button:hover { background: #f5f3fb; }
+  #msg-action button.danger { color: #e0245e; font-weight: 600; }
+
+  @media (max-width: 700px) {
+    .sidebar { width: 100px; }
+    .sidebar-header h2 { font-size: 15px; }
+    .me-text .email { display: none; }
+    .contact-card { flex-wrap: wrap; }
+    .req-actions { width: 100%; justify-content: flex-end; }
+    .sidebar { padding-bottom: 90px; }
+    #logout-btn { flex-direction: column; gap: 2px; font-size: 11px; padding: 12px 4px; }
+    .me-text .name { font-size: 12px; }
+    .nav-tab { flex-direction: column; gap: 4px; padding: 12px 4px; font-size: 10px; text-align: center; }
+    .nav-tab .tab-icon { font-size: 20px; }
+    .nav-tab .tab-label { white-space: normal; line-height: 1.2; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH SCREEN ============ -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <h1 id="auth-title">💬 Raumania</h1>
+    <p class="sub" id="auth-sub">Đăng nhập bằng email để bắt đầu chat</p>
+
+    <input type="text" id="display-name" placeholder="Tên hiển thị" style="display:none;">
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Mật khẩu (tối thiểu 6 ký tự)">
+
+    <div id="auth-error"></div>
+
+    <button class="primary" id="submit-btn">Đăng nhập</button>
+    <div id="auth-loading"></div>
+
+    <div class="switch-mode" id="switch-to-signup">
+      Chưa có tài khoản? <a href="#" id="link-signup">Tạo tài khoản ngay</a>
+    </div>
+    <div class="switch-mode" id="switch-to-login" style="display:none;">
+      Đã có tài khoản? <a href="#" id="link-login">Đăng nhập</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div id="app-screen">
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-header"><h2>Raumania</h2></div>
+      <div class="me-row">
+        <button id="profile-trigger">
+          <div class="avatar" id="my-avatar">?</div>
+          <div class="me-text">
+            <div class="name" id="my-name">—</div>
+            <div class="email" id="my-email">—</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="nav-tab active" data-tab="chat">
+        <div class="tab-icon">🌐</div><span class="tab-label">Phòng chat chung</span>
+      </div>
+      <div class="nav-tab" data-tab="friends">
+        <div class="tab-icon">👥</div><span class="tab-label">Bạn bè</span>
+      </div>
+      <div class="nav-tab" data-tab="groups">
+        <div class="tab-icon">🫂</div><span class="tab-label">Nhóm</span>
+      </div>
+      <div class="nav-tab" data-tab="contacts">
+        <div class="tab-icon">🔍</div><span class="tab-label">Kết bạn</span>
+      </div>
+      <div class="nav-tab" data-tab="admin" id="admin-tab" style="display:none;">
+        <div class="tab-icon">🛡️</div><span class="tab-label">Quản trị</span>
+      </div>
+
+      <button id="logout-btn" title="Đăng xuất"><span>⏻</span><span>Đăng xuất</span></button>
+    </div>
+
+    <!-- Chat panel -->
+    <div class="panel active" id="panel-chat">
+      <div class="panel-header">
+        <div class="avatar">🌐</div>
+        <div>
+          <div class="title">Phòng chat chung</div>
+          <div class="status" id="user-count">—</div>
+        </div>
+      </div>
+      <div id="messages"></div>
+      <form id="chat-form">
+        <input type="text" id="msg-input" placeholder="Aa" autocomplete="off">
+        <button type="submit">➤</button>
+      </form>
+    </div>
+
+    <!-- DM panel -->
+    <div class="panel" id="panel-dm">
+      <div class="panel-header">
+        <button class="back-btn" id="dm-back" title="Quay lại">←</button>
+        <div class="avatar" id="dm-avatar">?</div>
+        <div><div class="title" id="dm-name">—</div></div>
+        <button class="back-btn" id="dm-group-btn" title="Cài đặt nhóm" style="display:none; margin-left:auto;">⚙️</button>
+        <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh">✏️</button>
+        <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat">🎨</button>
+      </div>
+      <div id="dm-messages"></div>
+      <form id="dm-form">
+        <input type="text" id="dm-input" placeholder="Aa" autocomplete="off">
+        <button type="submit">➤</button>
+      </form>
+    </div>
+
+    <!-- Groups panel -->
+    <div class="panel" id="panel-groups">
+      <div class="panel-header"><div class="title">Nhóm</div><button class="friend-btn add" id="new-group-btn" style="margin-left:auto;">+ Tạo nhóm</button></div>
+      <div id="groups-list" style="flex:1; overflow-y:auto; padding:12px;"></div>
+    </div>
+
+    <!-- Friends panel -->
+    <div class="panel" id="panel-friends">
+      <div class="panel-header"><div class="title">Bạn bè</div></div>
+      <div id="friends-list" style="flex:1; overflow-y:auto; padding:12px;"></div>
+    </div>
+
+    <!-- Contacts panel -->
+    <div class="panel" id="panel-contacts">
+      <div class="panel-header"><div class="title">Kết bạn</div></div>
+      <div class="subtabs">
+        <button class="subtab active" data-sub="find">Tìm bạn</button>
+        <button class="subtab" data-sub="requests">Lời mời<span class="badge" id="req-badge"></span></button>
+      </div>
+      <div id="contacts-list"></div>
+    </div>
+
+    <!-- Admin panel -->
+    <div class="panel" id="panel-admin">
+      <div class="panel-header"><div class="title">Quản trị · Danh sách tài khoản</div></div>
+      <div id="admin-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LOGOUT CONFIRM MODAL ============ -->
+<div class="modal-overlay" id="logout-modal">
+  <div class="modal-box">
+    <h3>Đăng xuất?</h3>
+    <p>Bạn có chắc muốn đăng xuất khỏi Raumania không?</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="cancel-logout">Hủy</button>
+      <button class="modal-confirm-danger" id="confirm-logout">Đăng xuất</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CHAT THEME MODAL ============ -->
+<div class="modal-overlay" id="theme-modal">
+  <div class="modal-box">
+    <h3>Giao diện đoạn chat</h3>
+    <p>Ảnh nền này cả hai bạn đều thấy trong đoạn chat với <b id="theme-friend"></b>.</p>
+    <button class="modal-btn-primary" id="theme-pick" style="margin-top:0;">🖼️ Chọn ảnh nền</button>
+    <button class="modal-btn-soft" id="theme-reset" style="width:100%; margin-top:8px;">Đặt lại mặc định</button>
+    <button class="modal-btn-close" id="theme-close">Đóng</button>
+    <input type="file" id="theme-input" accept="image/*" style="display:none;">
+  </div>
+</div>
+
+<div id="emoji-pop"></div>
+<div id="upload-toast" style="display:none; position:fixed; left:50%; bottom:44px; transform:translateX(-50%); background:#222; color:white; padding:10px 16px; border-radius:20px; font-size:13px; z-index:700;"></div>
+<div class="modal-overlay" id="gset-modal">
+  <div class="modal-box">
+    <h3>Cài đặt nhóm</h3>
+    <div class="profile-avatar-lg" id="gset-avatar" style="margin:0 auto 10px;">?</div>
+    <button class="modal-btn-soft" id="gset-photo" style="width:100%;">🖼️ Đổi ảnh nhóm</button>
+    <button class="modal-btn-soft" id="gset-photo-del" style="width:100%; margin-top:8px;">Xóa ảnh nhóm</button>
+    <input type="text" id="gset-name" class="mini-input" placeholder="Tên nhóm" maxlength="40" style="margin-top:12px;">
+    <button class="modal-btn-primary" id="gset-save" style="margin-top:0;">Lưu tên nhóm</button>
+    <button class="modal-btn-close" id="gset-close">Đóng</button>
+    <input type="file" id="gset-input" accept="image/*" style="display:none;">
+  </div>
+</div>
+<div class="modal-overlay" id="lightbox" style="z-index:600; background:rgba(0,0,0,.85);"><img id="lightbox-img" alt=""></div>
+
+<!-- ============ GROUP CREATE MODAL ============ -->
+<div class="modal-overlay" id="group-modal">
+  <div class="modal-box">
+    <h3>Tạo nhóm</h3>
+    <p>Chọn ít nhất 2 bạn bè (tính cả bạn là từ 3 người trở lên).</p>
+    <input type="text" id="group-name" class="mini-input" placeholder="Tên nhóm" maxlength="40">
+    <div id="group-friends" style="max-height:220px; overflow-y:auto; margin:8px 0;"></div>
+    <div id="group-err" style="color:#e0245e; font-size:13px; min-height:16px;"></div>
+    <button class="modal-btn-primary" id="group-create" style="margin-top:0;">Tạo nhóm</button>
+    <button class="modal-btn-close" id="group-cancel">Hủy</button>
+  </div>
+</div>
+
+<!-- ============ NICKNAME MODAL ============ -->
+<div class="modal-overlay" id="nick-modal">
+  <div class="modal-box">
+    <h3>Đặt biệt danh</h3>
+    <select id="nick-target" class="mini-input"></select>
+    <input type="text" id="nick-input" class="mini-input" placeholder="Biệt danh mới" maxlength="30">
+    <button class="modal-btn-primary" id="nick-shared" style="margin-top:0;">👥 Mọi người trong cuộc trò chuyện đều thấy</button>
+    <button class="modal-btn-soft" id="nick-private" style="width:100%; margin-top:8px;">🔒 Chỉ mình tôi thấy</button>
+    <button class="modal-btn-soft" id="nick-clear" style="width:100%; margin-top:8px;">Xóa biệt danh</button>
+    <button class="modal-btn-close" id="nick-close">Đóng</button>
+  </div>
+</div>
+
+<!-- ============ FRIEND PROFILE MODAL ============ -->
+<div class="modal-overlay" id="friend-modal">
+  <div class="modal-box">
+    <div class="profile-avatar-lg" id="fp-avatar">?</div>
+    <div class="profile-field">
+      <div class="pf-label">Tên hiển thị</div>
+      <div class="pf-value" id="fp-name">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">ID kết bạn</div>
+      <div class="pf-value" id="fp-code">—</div>
+    </div>
+    <div class="profile-field" id="fp-email-wrap" style="display:none;">
+      <div class="pf-label">Email (chỉ quản trị thấy)</div>
+      <div class="pf-value" id="fp-email">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">Tham gia từ</div>
+      <div class="pf-value" id="fp-created">—</div>
+    </div>
+    <button class="modal-btn-primary" id="fp-chat">💬 Trò chuyện</button>
+    <div class="modal-row">
+      <button class="modal-btn-soft" id="fp-unfriend">Hủy kết bạn</button>
+      <button class="modal-btn-danger" id="fp-block">🚫 Chặn</button>
+    </div>
+    <button class="modal-btn-close" id="fp-close">Đóng</button>
+  </div>
+</div>
+
+<!-- ============ PROFILE MODAL ============ -->
+<div class="modal-overlay" id="profile-modal">
+  <div class="modal-box">
+    <div class="profile-avatar-lg" id="profile-avatar-lg">?</div>
+    <div class="profile-field">
+      <div class="pf-label">Tên hiển thị</div>
+      <div class="pf-value" id="profile-name">—</div>
+      <div id="name-edit" style="display:none; gap:8px; margin-top:6px;">
+        <input id="name-input" maxlength="30" style="flex:1; min-width:0; padding:9px 12px; border:1.5px solid #e2e4e8; border-radius:10px; font-size:14px;">
+        <button id="name-save" class="modal-btn-primary" style="margin:0; width:auto; padding:0 16px;">Lưu</button>
+      </div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">ID kết bạn</div>
+      <div class="pf-value" id="profile-code">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">Email</div>
+      <div class="pf-value" id="profile-email">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">Tham gia từ</div>
+      <div class="pf-value" id="profile-created">—</div>
+    </div>
+    <div class="modal-row" style="margin-top:16px;">
+      <button class="modal-btn-soft" id="edit-name-btn">✏️ Đổi tên</button>
+      <button class="modal-btn-soft" id="edit-photo-btn">📷 Đổi ảnh</button>
+      <button class="modal-btn-soft" id="remove-photo-btn" style="display:none;">Xóa ảnh</button>
+    </div>
+    <input type="file" id="photo-input" accept="image/*" style="display:none;">
+    <button id="close-profile-btn">Đóng</button>
+  </div>
+</div>
+
+<div id="msg-action">
+  <button type="button" id="ma-me">Ẩn với mình</button>
+  <button type="button" id="ma-all" class="danger">Thu hồi với mọi người</button>
+</div>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAV-JO3UKzvWs-JZPMkEVQNuzQaFZBGH_8",
+  authDomain: "appnhantincuavua36.firebaseapp.com",
+  databaseURL: "https://appnhantincuavua36-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "appnhantincuavua36",
+  storageBucket: "appnhantincuavua36.firebasestorage.app",
+  messagingSenderId: "623265561453",
+  appId: "1:623265561453:web:f4b55902dba85082ae3864",
+  measurementId: "G-MJC2QC1FRV"
+};
+
+const ADMIN_EMAIL = "duong158209@gmail.com";
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ---------------- AUTH SCREEN LOGIC ---------------- */
+let mode = "login";
+
+const authTitle = document.getElementById("auth-title");
+const authSub = document.getElementById("auth-sub");
+const displayNameInput = document.getElementById("display-name");
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const submitBtn = document.getElementById("submit-btn");
+const switchToSignup = document.getElementById("switch-to-signup");
+const switchToLogin = document.getElementById("switch-to-login");
+const authLoading = document.getElementById("auth-loading");
+
+function showAuthError(msg) { document.getElementById("auth-error").textContent = msg; }
+function setLoading(on) { authLoading.textContent = on ? "Đang xử lý..." : ""; }
+
+function setMode(newMode) {
+  mode = newMode;
+  showAuthError("");
+  if (mode === "login") {
+    authTitle.textContent = "💬 Raumania";
+    authSub.textContent = "Đăng nhập bằng email để bắt đầu chat";
+    displayNameInput.style.display = "none";
+    submitBtn.textContent = "Đăng nhập";
+    switchToSignup.style.display = "block";
+    switchToLogin.style.display = "none";
+  } else {
+    authTitle.textContent = "💬 Tạo tài khoản";
+    authSub.textContent = "Điền thông tin để tạo tài khoản mới";
+    displayNameInput.style.display = "block";
+    submitBtn.textContent = "Tạo tài khoản";
+    switchToSignup.style.display = "none";
+    switchToLogin.style.display = "block";
+  }
+}
+
+document.getElementById("link-signup").addEventListener("click", (e) => { e.preventDefault(); setMode("signup"); });
+document.getElementById("link-login").addEventListener("click", (e) => { e.preventDefault(); setMode("login"); });
+
+submitBtn.addEventListener("click", async () => {
+  showAuthError("");
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+  if (!email || !password) return showAuthError("Nhập email và mật khẩu.");
+
+  setLoading(true);
+  try {
+    if (mode === "login") {
+      await auth.signInWithEmailAndPassword(email, password);
+    } else {
+      const name = displayNameInput.value.trim() || email.split("@")[0];
+      if (password.length < 6) { setLoading(false); return showAuthError("Mật khẩu cần tối thiểu 6 ký tự."); }
+      const cred = await auth.createUserWithEmailAndPassword(email, password);
+      await cred.user.updateProfile({ displayName: name });
+      await db.collection("users").doc(cred.user.uid).set({
+        name: name,
+        email: email,
+        friends: [],
+        requestsSent: [],
+        requestsReceived: [],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  } catch (e) {
+    showAuthError(translateError(e.code));
+  }
+  setLoading(false);
+});
+
+function translateError(code) {
+  const map = {
+    "auth/email-already-in-use": "Email này đã được đăng ký.",
+    "auth/invalid-email": "Email không hợp lệ.",
+    "auth/weak-password": "Mật khẩu quá yếu (tối thiểu 6 ký tự).",
+    "auth/user-not-found": "Tài khoản không tồn tại.",
+    "auth/wrong-password": "Sai mật khẩu.",
+    "auth/invalid-credential": "Email hoặc mật khẩu không đúng."
+  };
+  return map[code] || ("Lỗi: " + code);
+}
+
+/* ---------------- LOGOUT CONFIRM MODAL ---------------- */
+const logoutModal = document.getElementById("logout-modal");
+document.getElementById("logout-btn").addEventListener("click", () => logoutModal.classList.add("show"));
+document.getElementById("cancel-logout").addEventListener("click", () => logoutModal.classList.remove("show"));
+document.getElementById("confirm-logout").addEventListener("click", () => {
+  logoutModal.classList.remove("show");
+  auth.signOut();
+});
+
+/* ---------------- PROFILE MODAL ---------------- */
+const profileModal = document.getElementById("profile-modal");
+document.getElementById("profile-trigger").addEventListener("click", () => {
+  if (!currentUser) return;
+  const name = currentUser.displayName || currentUser.email.split("@")[0];
+  document.getElementById("profile-avatar-lg").textContent = name.charAt(0).toUpperCase();
+  document.getElementById("profile-name").textContent = (currentUserData && currentUserData.name) || name;
+  setAvatar(document.getElementById("profile-avatar-lg"), name, currentUserData && currentUserData.photo);
+  document.getElementById("remove-photo-btn").style.display = (currentUserData && currentUserData.photo) ? "block" : "none";
+  document.getElementById("name-edit").style.display = "none";
+  document.getElementById("profile-email").textContent = currentUser.email;
+  document.getElementById("profile-code").textContent = (currentUserData && currentUserData.friendCode) || "—";
+  const createdDate = (currentUserData && currentUserData.createdAt)
+    ? currentUserData.createdAt.toDate()
+    : (currentUser.metadata && currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime) : null);
+  const created = createdDate ? createdDate.toLocaleString("vi-VN") : "Không rõ";
+  document.getElementById("profile-created").textContent = created;
+  profileModal.classList.add("show");
+});
+document.getElementById("close-profile-btn").addEventListener("click", () => profileModal.classList.remove("show"));
+
+/* ---------------- ĐỔI TÊN / ĐỔI ẢNH ---------------- */
+document.getElementById("edit-name-btn").addEventListener("click", () => {
+  const box = document.getElementById("name-edit");
+  const input = document.getElementById("name-input");
+  input.value = document.getElementById("profile-name").textContent;
+  box.style.display = "flex";
+  input.focus();
+});
+
+document.getElementById("name-save").addEventListener("click", async () => {
+  const v = document.getElementById("name-input").value.trim();
+  if (!v) return alert("Tên không được để trống.");
+  const btn = document.getElementById("name-save");
+  btn.disabled = true;
+  try {
+    await currentUser.updateProfile({ displayName: v });
+    await db.collection("users").doc(currentUser.uid).update({ name: v });
+    currentUserData.name = v;
+    document.getElementById("profile-name").textContent = v;
+    document.getElementById("name-edit").style.display = "none";
+    refreshMyUI();
+  } catch (e) {
+    alert("Không đổi được tên lúc này, thử lại sau.");
+  }
+  btn.disabled = false;
+});
+
+function imageToDataURL(file, size) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = size; c.height = size;
+        const ctx = c.getContext("2d");
+        const min = Math.min(img.width, img.height);       // cắt vuông ở giữa
+        const sx = (img.width - min) / 2, sy = (img.height - min) / 2;
+        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+        resolve(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById("edit-photo-btn").addEventListener("click", () => document.getElementById("photo-input").click());
+document.getElementById("photo-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const dataUrl = await imageToDataURL(file, 256);
+    await db.collection("users").doc(currentUser.uid).update({ photo: dataUrl });
+    currentUserData.photo = dataUrl;
+    setAvatar(document.getElementById("profile-avatar-lg"), currentUser.displayName, dataUrl);
+    document.getElementById("remove-photo-btn").style.display = "block";
+    refreshMyUI();
+  } catch (err) {
+    alert("Không đổi được ảnh lúc này, thử ảnh khác nhé.");
+  }
+});
+
+document.getElementById("remove-photo-btn").addEventListener("click", async () => {
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ photo: firebase.firestore.FieldValue.delete() });
+    currentUserData.photo = "";
+    setAvatar(document.getElementById("profile-avatar-lg"), currentUser.displayName, "");
+    document.getElementById("remove-photo-btn").style.display = "none";
+    refreshMyUI();
+  } catch (err) {
+    alert("Không xóa được ảnh lúc này.");
+  }
+});
+
+/* ---------------- TAB SWITCHING ---------------- */
+document.querySelectorAll(".nav-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+    document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+    document.getElementById("app-screen").classList.toggle("chat-focus", tab.dataset.tab === "chat");
+    if (tab.dataset.tab === "contacts") loadContacts();
+    if (tab.dataset.tab === "friends") loadFriends();
+    if (tab.dataset.tab === "groups") listenGroups();
+    if (tab.dataset.tab === "admin") loadAdminList();
+  });
+});
+
+/* ---------------- SESSION HANDLING ---------------- */
+let currentUser = null;
+let currentUserData = null;
+let unsubscribeMessages = null;
+let unsubscribeUsers = null;
+let unsubscribeMe = null;
+const usersMap = {};          // uid -> { name, photo }  (lấy realtime từ danh sách user)
+let lastPublicSnap = null;
+
+function setAvatar(el, name, photo) {
+  if (photo) {
+    el.textContent = "";
+    el.style.backgroundImage = 'url("' + photo + '")';
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+  } else {
+    el.style.backgroundImage = "";
+    el.style.backgroundSize = "";
+    el.style.backgroundPosition = "";
+    el.textContent = (name || "?").charAt(0).toUpperCase();
+  }
+}
+
+function refreshMyUI() {
+  if (!currentUser) return;
+  const name = (currentUserData && currentUserData.name) || currentUser.displayName || currentUser.email.split("@")[0];
+  document.getElementById("my-name").textContent = name;
+  setAvatar(document.getElementById("my-avatar"), name, currentUserData && currentUserData.photo);
+}
+let unsubscribeDM = null;
+
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    currentUser = user;
+    document.getElementById("auth-screen").style.display = "none";
+    document.getElementById("app-screen").style.display = "block";
+
+    const name = user.displayName || user.email.split("@")[0];
+    document.getElementById("my-name").textContent = name;
+    document.getElementById("my-email").textContent = user.email;
+    document.getElementById("my-avatar").textContent = name.charAt(0).toUpperCase();
+
+    await db.collection("users").doc(user.uid).set({
+      name: name,
+      email: user.email,
+      lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    let snap = await db.collection("users").doc(user.uid).get();
+    currentUserData = snap.data() || {};
+
+    // Tài khoản cũ chưa có createdAt -> lấy đúng thời gian tạo tài khoản từ Firebase Auth
+    if (!currentUserData.createdAt && user.metadata && user.metadata.creationTime) {
+      await db.collection("users").doc(user.uid).set({
+        createdAt: firebase.firestore.Timestamp.fromDate(new Date(user.metadata.creationTime))
+      }, { merge: true });
+      snap = await db.collection("users").doc(user.uid).get();
+      currentUserData = snap.data() || {};
+    }
+
+    if (user.email === ADMIN_EMAIL) {
+      document.getElementById("admin-tab").style.display = "flex";
+    }
+
+    if (!currentUserData.friendCode) {
+      const code = await generateUniqueCode();
+      await db.collection("users").doc(user.uid).set({ friendCode: code }, { merge: true });
+      currentUserData.friendCode = code;
+    }
+
+    refreshMyUI();
+
+    if (unsubscribeMe) unsubscribeMe();
+    unsubscribeMe = db.collection("users").doc(user.uid).onSnapshot((doc) => {
+      const d = doc.data() || {};
+      currentUserData = Object.assign(currentUserData || {}, d);
+      updateReqBadge(d);
+      refreshMyUI();
+      if (contactsSub === "requests" && document.getElementById("panel-contacts").classList.contains("active")) loadContacts();
+    });
+
+    listenOnlineUsers();
+    listenMessages();
+
+    setInterval(() => {
+      db.collection("users").doc(user.uid).set({
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }, 60000);
+  } else {
+    currentUser = null;
+    currentUserData = null;
+    if (unsubscribeMessages) unsubscribeMessages();
+    if (unsubscribeUsers) unsubscribeUsers();
+    if (unsubscribeMe) unsubscribeMe();
+    if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+    if (unsubscribeGroups) { unsubscribeGroups(); unsubscribeGroups = null; }
+    currentChat = null;
+    document.getElementById("app-screen").classList.remove("chat-focus");
+    document.getElementById("app-screen").style.display = "none";
+    document.getElementById("auth-screen").style.display = "flex";
+    document.getElementById("admin-tab").style.display = "none";
+    emailInput.value = "";
+    passwordInput.value = "";
+    setMode("login");
+  }
+});
+
+/* ---------------- ONLINE COUNT ---------------- */
+function listenOnlineUsers() {
+  if (unsubscribeUsers) unsubscribeUsers();
+  unsubscribeUsers = db.collection("users").onSnapshot((snap) => {
+    const now = Date.now();
+    let count = 0;
+    let changed = false;
+    snap.forEach(doc => {
+      const d = doc.data();
+      const lastSeen = d.lastSeen ? d.lastSeen.toMillis() : 0;
+      if (now - lastSeen < 2 * 60 * 1000) count++;
+      const nm = d.name || "", ph = d.photo || "";
+      const prev = usersMap[doc.id];
+      if (!prev || prev.name !== nm || prev.photo !== ph) { usersMap[doc.id] = { name: nm, photo: ph }; changed = true; }
+    });
+    if (changed && lastPublicSnap) renderPublic(lastPublicSnap);
+    document.getElementById("user-count").textContent = count + " người đang hoạt động";
+  });
+}
+
+/* ---------------- CHAT ---------------- */
+function renderPublic(snap) {
+  const messagesEl = document.getElementById("messages");
+  const nearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+  messagesEl.innerHTML = "";
+  snap.forEach(doc => {
+    const m = doc.data({ serverTimestamps: "estimate" });   // tin đang gửi vẫn có giờ tạm, không bị trống
+    renderMessage(m, doc.metadata.hasPendingWrites, null, true, doc.id, "public");
+  });
+  const last = snap.docs[snap.docs.length - 1];
+  const lastIsMine = last && currentUser && last.data().uid === currentUser.uid;
+  if (nearBottom || lastIsMine) messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function listenMessages() {
+  unsubscribeMessages = db.collection("messages")
+    .orderBy("createdAt", "asc")
+    .limitToLast(200)
+    .onSnapshot((snap) => {
+      lastPublicSnap = snap;
+      renderPublic(snap);
+    });
+}
+
+function messageColRef(scope) {
+  if (scope === "public") return db.collection("messages");
+  if (!currentChat) return null;
+  const root = currentChat.type === "group" ? db.collection("groups") : db.collection("chats");
+  return root.doc(currentChat.id).collection("messages");
+}
+
+function renderMessage(m, pending, container, group, msgId, scope) {
+  const messagesEl = container || document.getElementById("messages");
+  if (currentUser && Array.isArray(m.deletedFor) && m.deletedFor.indexOf(currentUser.uid) >= 0) return;
+  const showName = group !== false;
+  const isMe = currentUser && m.uid === currentUser.uid;
+  const u = usersMap[m.uid] || {};
+  let dispName = u.name || m.name || "Ẩn danh";
+  let dispPhoto = u.photo || "";
+  if (!isMe && group === false && currentFriend && currentFriend.uid === m.uid) {
+    dispName = u.name || currentFriend.name || dispName;
+    if (!dispPhoto && currentFriend.doc) dispPhoto = currentFriend.doc.data().photo || "";
+  }
+  if (!isMe && messagesEl.id === "dm-messages") { const nk = nickFor(m.uid); if (nk) dispName = nk; }
+  const time = m.createdAt ? m.createdAt.toDate().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
+
+  if (!isMe && showName && !m.recalled) {
+    const label = document.createElement("div");
+    label.className = "sender-label";
+    label.textContent = dispName;
+    messagesEl.appendChild(label);
+  }
+
+  const row = document.createElement("div");
+  row.className = "msg-row " + (isMe ? "me" : "other");
+
+  if (!isMe) {
+    const mini = document.createElement("div");
+    mini.className = "mini-avatar";
+    setAvatar(mini, dispName, dispPhoto);
+    row.appendChild(mini);
+  }
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  if (m.recalled) {
+    bubble.className = "bubble recalled-bubble";
+    bubble.textContent = isMe ? "Bạn đã thu hồi một tin nhắn" : "Tin nhắn đã được thu hồi";
+  } else if (m.type === "image" && m.image) {
+    bubble.style.padding = "4px";
+    const im = document.createElement("img");
+    im.className = "chat-img"; im.src = m.image; im.alt = "Ảnh";
+    im.addEventListener("click", (ev) => { ev.stopPropagation(); document.getElementById("lightbox-img").src = m.image; document.getElementById("lightbox").classList.add("show"); });
+    bubble.appendChild(im);
+  } else if (m.type === "file" && (m.fileData || m.fileURL)) {
+    const a = document.createElement("a");
+    a.className = "chat-file"; a.href = m.fileData || m.fileURL; a.download = m.fileName || "tep";
+    if (m.fileURL) { a.target = "_blank"; a.rel = "noopener"; }
+    const ic = document.createElement("span"); ic.textContent = "📄"; ic.style.fontSize = "26px";
+    const box = document.createElement("span");
+    const fn = document.createElement("div"); fn.className = "fn"; fn.textContent = m.fileName || "Tệp";
+    const fs = document.createElement("div"); fs.className = "fs"; fs.textContent = fmtSize(m.fileSize || 0) + " · bấm để tải";
+    box.appendChild(fn); box.appendChild(fs); a.appendChild(ic); a.appendChild(box);
+    bubble.appendChild(a);
+  } else {
+    bubble.textContent = m.text;
+  }
+  if (pending) bubble.style.opacity = "0.6";
+  if (msgId && !m.recalled) {
+    bubble.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      openMsgAction(ev, { id: msgId, scope: scope || (messagesEl.id === "dm-messages" ? "dm" : "public"), isMe: !!isMe, uid: m.uid });
+    });
+  }
+  row.appendChild(bubble);
+  messagesEl.appendChild(row);
+
+  const meta = document.createElement("div");
+  meta.className = "msg-meta";
+  meta.textContent = pending ? "Đang gửi…" : (m.recalled ? "Đã thu hồi" : time);
+  meta.style.textAlign = isMe ? "right" : "left";
+  meta.style.marginLeft = isMe ? "0" : "40px";
+  messagesEl.appendChild(meta);
+}
+
+let msgActionTarget = null;
+function openMsgAction(ev, info) {
+  msgActionTarget = info;
+  const menu = document.getElementById("msg-action");
+  document.getElementById("ma-all").style.display = info.isMe ? "block" : "none";
+  document.getElementById("ma-me").textContent = info.isMe ? "Thu hồi với mình" : "Ẩn với mình";
+  menu.classList.add("show");
+  const w = 230, h = info.isMe ? 96 : 52;
+  let x = ev.clientX, y = ev.clientY;
+  if (x + w > window.innerWidth - 8) x = window.innerWidth - w - 8;
+  if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  menu.style.left = Math.max(8, x) + "px";
+  menu.style.top = Math.max(8, y) + "px";
+}
+document.addEventListener("click", () => {
+  const menu = document.getElementById("msg-action");
+  if (menu) menu.classList.remove("show");
+});
+
+async function recallForMe() {
+  if (!msgActionTarget || !currentUser) return;
+  const col = messageColRef(msgActionTarget.scope === "public" ? "public" : "dm");
+  if (!col) return;
+  try {
+    await col.doc(msgActionTarget.id).update({ deletedFor: FV().arrayUnion(currentUser.uid) });
+  } catch (e) { alert("Không ẩn được tin nhắn lúc này."); }
+}
+async function recallForAll() {
+  if (!msgActionTarget || !msgActionTarget.isMe) return;
+  if (!confirm("Thu hồi tin nhắn này với tất cả mọi người?")) return;
+  const col = messageColRef(msgActionTarget.scope === "public" ? "public" : "dm");
+  if (!col) return;
+  try {
+    await col.doc(msgActionTarget.id).update({
+      recalled: true,
+      text: "",
+      type: "text",
+      image: FV().delete(),
+      fileData: FV().delete(),
+      fileURL: FV().delete()
+    });
+  } catch (e) { alert("Không thu hồi được. Kiểm tra quyền Firestore nhé."); }
+}
+document.getElementById("ma-me").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("msg-action").classList.remove("show"); recallForMe(); });
+document.getElementById("ma-all").addEventListener("click", (e) => { e.stopPropagation(); document.getElementById("msg-action").classList.remove("show"); recallForAll(); });
+
+
+document.getElementById("chat-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("msg-input");
+  const text = input.value.trim();
+  if (!text || !currentUser) return;
+  input.value = "";
+  input.focus();
+  // Không await: tin hiện ngay trên máy mình (Firestore tự hiển thị bản chờ), gửi lên server chạy ngầm
+  db.collection("messages").add({
+    text: text,
+    uid: currentUser.uid,
+    name: currentUser.displayName || currentUser.email.split("@")[0],
+    email: currentUser.email,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {
+    input.value = text;
+    alert("Gửi tin nhắn thất bại, thử lại nhé.");
+  });
+});
+
+/* ---------------- CONTACTS / FRIENDS ---------------- */
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // bỏ O,I,0,1 cho khỏi nhầm
+function randomCode() {
+  let c = "";
+  for (let i = 0; i < 6; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return c;
+}
+async function generateUniqueCode() {
+  for (let i = 0; i < 10; i++) {
+    const c = randomCode();
+    const q = await db.collection("users").where("friendCode", "==", c).limit(1).get();
+    if (q.empty) return c;
+  }
+  return randomCode();
+}
+
+let contactsSub = "find";
+let lastSearchCode = "";
+let contactsMe = {};
+
+document.querySelectorAll(".subtab").forEach(btn => {
+  btn.addEventListener("click", () => { contactsSub = btn.dataset.sub; loadContacts(); });
+});
+
+function updateReqBadge(me) {
+  const n = ((me && me.requestsReceived) || []).length;
+  document.getElementById("req-badge").textContent = n > 0 ? n : "";
+}
+
+async function loadContacts() {
+  document.querySelectorAll(".subtab").forEach(b => b.classList.toggle("active", b.dataset.sub === contactsSub));
+  const listEl = document.getElementById("contacts-list");
+
+  const meSnap = await db.collection("users").doc(currentUser.uid).get();
+  contactsMe = meSnap.data() || {};
+  updateReqBadge(contactsMe);
+
+  if (contactsSub === "find") return renderFind(listEl);
+
+  const blockedNow = contactsMe.blocked || [];
+  const uids = (contactsMe.requestsReceived || []).filter(id => !blockedNow.includes(id));
+  listEl.innerHTML = '<div class="empty-note">Đang tải...</div>';
+  const docs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
+
+  listEl.innerHTML = "";
+  if (docs.length === 0) {
+    listEl.innerHTML = '<div class="empty-note">Chưa có lời mời kết bạn nào.</div>';
+    return;
+  }
+  docs.forEach(d => listEl.appendChild(buildContactCard(d, "request")));
+}
+
+async function loadFriends() {
+  const listEl = document.getElementById("friends-list");
+  listEl.innerHTML = '<div class="empty-note">Đang tải...</div>';
+  try {
+    const meSnap = await db.collection("users").doc(currentUser.uid).get();
+    contactsMe = meSnap.data() || {};
+    updateReqBadge(contactsMe);
+    const uids = contactsMe.friends || [];
+    const docs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
+
+    listEl.innerHTML = "";
+    if (docs.length === 0) {
+      listEl.innerHTML = '<div class="empty-note">Bạn chưa có bạn bè nào. Vào mục Kết bạn, nhập ID để tìm nhé!</div>';
+    } else {
+      docs.forEach(d => listEl.appendChild(buildContactCard(d, "friendlist")));
+    }
+
+    const blockedIds = contactsMe.blocked || [];
+    if (blockedIds.length > 0) {
+      const bdocs = (await Promise.all(blockedIds.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
+      if (bdocs.length > 0) {
+        const t = document.createElement("div");
+        t.className = "section-title";
+        t.textContent = "Đã chặn";
+        listEl.appendChild(t);
+        bdocs.forEach(d => listEl.appendChild(buildContactCard(d, "blocked")));
+      }
+    }
+  } catch (e) {
+    listEl.innerHTML = '<div class="empty-note">Không tải được danh sách bạn bè, thử lại sau.</div>';
+  }
+}
+
+function renderFind(listEl) {
+  listEl.innerHTML = "";
+  const myCode = contactsMe.friendCode || "······";
+
+  const box = document.createElement("div");
+  box.className = "code-box";
+  box.innerHTML = '<div class="cb-label">ID của bạn</div><div class="cb-code">' + escapeHtml(myCode) + '</div>';
+  const copyBtn = document.createElement("button");
+  copyBtn.textContent = "Sao chép ID";
+  copyBtn.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(myCode); copyBtn.textContent = "Đã sao chép ✓"; }
+    catch (e) { copyBtn.textContent = myCode; }
+    setTimeout(() => copyBtn.textContent = "Sao chép ID", 1500);
+  });
+  box.appendChild(copyBtn);
+  listEl.appendChild(box);
+
+  const title = document.createElement("div");
+  title.className = "section-title";
+  title.textContent = "Nhập ID để tìm bạn";
+  listEl.appendChild(title);
+
+  const row = document.createElement("div");
+  row.className = "search-row";
+  const input = document.createElement("input");
+  input.maxLength = 6; input.placeholder = "6 ký tự"; input.autocomplete = "off"; input.autocapitalize = "characters";
+  input.value = lastSearchCode;
+  const go = document.createElement("button");
+  go.textContent = "Tìm";
+  row.appendChild(input); row.appendChild(go);
+  listEl.appendChild(row);
+
+  const result = document.createElement("div");
+  result.id = "search-result";
+  listEl.appendChild(result);
+
+  const doSearch = () => { lastSearchCode = input.value.trim().toUpperCase(); runSearch(lastSearchCode, result); };
+  go.addEventListener("click", doSearch);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+  if (lastSearchCode.length === 6) runSearch(lastSearchCode, result);
+}
+
+async function runSearch(code, resultEl) {
+  const note = (t) => { resultEl.innerHTML = '<div class="empty-note">' + t + '</div>'; };
+  if (code.length !== 6) return note("ID gồm đúng 6 ký tự.");
+  if (code === contactsMe.friendCode) return note("Đây là ID của chính bạn 😄");
+  resultEl.innerHTML = '<div class="empty-note">Đang tìm...</div>';
+  try {
+    const q = await db.collection("users").where("friendCode", "==", code).limit(1).get();
+    if (q.empty) return note("Không tìm thấy ai với ID này.");
+    const doc = q.docs[0];
+    if ((doc.data().blocked || []).includes(currentUser.uid)) return note("Không tìm thấy ai với ID này.");
+    let state = "add";
+    if ((contactsMe.blocked || []).includes(doc.id)) state = "blocked";
+    else if ((contactsMe.friends || []).includes(doc.id)) state = "friend";
+    else if ((contactsMe.requestsSent || []).includes(doc.id)) state = "sent";
+    else if ((contactsMe.requestsReceived || []).includes(doc.id)) state = "request";
+    resultEl.innerHTML = "";
+    resultEl.appendChild(buildContactCard(doc, state));
+  } catch (e) {
+    note("Không tìm được lúc này, thử lại sau.");
+  }
+}
+
+function buildContactCard(doc, state) {
+  const d = doc.data();
+  const card = document.createElement("div");
+  card.className = "contact-card";
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  setAvatar(avatar, d.name, d.photo);
+
+  const info = document.createElement("div");
+  info.className = "contact-info";
+  info.innerHTML = `<div class="cname">${escapeHtml(d.name || "Ẩn danh")}</div><div class="cemail">ID: ${escapeHtml(d.friendCode || "")}</div>`;
+
+  card.appendChild(avatar);
+  card.appendChild(info);
+
+  if (state === "request") {
+    const box = document.createElement("div");
+    box.className = "req-actions";
+    const ok = document.createElement("button");
+    ok.className = "friend-btn accept"; ok.textContent = "Chấp nhận";
+    ok.addEventListener("click", () => acceptRequest(doc.id, ok));
+    const no = document.createElement("button");
+    no.className = "friend-btn decline"; no.textContent = "Từ chối";
+    no.addEventListener("click", () => declineRequest(doc.id, no));
+    box.appendChild(ok); box.appendChild(no);
+    card.appendChild(box);
+    return card;
+  }
+
+  if (state === "friendlist") {
+    const chev = document.createElement("span");
+    chev.className = "chev"; chev.textContent = "›";
+    card.appendChild(chev);
+    card.style.cursor = "pointer";
+    const dn = doc.data().name || "Ẩn danh";
+    avatar.style.cursor = "pointer";
+    avatar.addEventListener("click", (e) => { e.stopPropagation(); openFriendProfile(doc); });
+    card.addEventListener("click", () => openDM({ uid: doc.id, name: dn, doc: doc }));
+    return card;
+  }
+
+  const btn = document.createElement("button");
+  if (state === "friend") {
+    btn.className = "friend-btn added"; btn.textContent = "Đã là bạn bè"; btn.disabled = true;
+  } else if (state === "blocked") {
+    btn.className = "friend-btn decline"; btn.textContent = "Bỏ chặn";
+    btn.addEventListener("click", () => unblockUser(doc.id, btn));
+  } else if (state === "sent") {
+    btn.className = "friend-btn added"; btn.textContent = "Hủy lời mời";
+    btn.addEventListener("click", () => cancelRequest(doc.id, btn));
+  } else {
+    btn.className = "friend-btn add"; btn.textContent = "+ Kết bạn";
+    btn.addEventListener("click", () => sendRequest(doc.id, btn));
+  }
+  card.appendChild(btn);
+  return card;
+}
+
+/* ---------------- FRIEND PROFILE + DM ---------------- */
+const friendModal = document.getElementById("friend-modal");
+let currentFriend = null; // { uid, name }
+let currentChat = null;   // { type: "dm"|"group", id, members? }
+let sharedNicks = {};     // biệt danh chung của cuộc trò chuyện đang mở
+let lastChatSnap = null;
+let unsubscribeGroups = null;
+
+function openFriendProfile(doc) {
+  const d = doc.data();
+  const name = d.name || "Ẩn danh";
+  currentFriend = { uid: doc.id, name: name, doc: doc };
+  setAvatar(document.getElementById("fp-avatar"), name, d.photo);
+  document.getElementById("fp-name").textContent = name;
+  document.getElementById("fp-code").textContent = d.friendCode || "—";
+  document.getElementById("fp-created").textContent = d.createdAt ? d.createdAt.toDate().toLocaleString("vi-VN") : "Không rõ";
+
+  // email chỉ hiện cho quản trị
+  const isAdmin = currentUser && currentUser.email === ADMIN_EMAIL;
+  document.getElementById("fp-email-wrap").style.display = isAdmin ? "block" : "none";
+  document.getElementById("fp-email").textContent = d.email || "—";
+
+  friendModal.classList.add("show");
+}
+document.getElementById("fp-close").addEventListener("click", () => friendModal.classList.remove("show"));
+document.getElementById("fp-chat").addEventListener("click", () => {
+  friendModal.classList.remove("show");
+  if (currentFriend) openDM(currentFriend);
+});
+
+async function removeRelation(otherUid) {
+  // gỡ bạn bè + xóa mọi lời mời giữa 2 người, cả 2 phía
+  await db.collection("users").doc(otherUid).update({
+    friends: FV().arrayRemove(currentUser.uid),
+    requestsSent: FV().arrayRemove(currentUser.uid),
+    requestsReceived: FV().arrayRemove(currentUser.uid)
+  });
+  await db.collection("users").doc(currentUser.uid).update({
+    friends: FV().arrayRemove(otherUid),
+    requestsSent: FV().arrayRemove(otherUid),
+    requestsReceived: FV().arrayRemove(otherUid)
+  });
+}
+
+function goFriendsTab() {
+  document.querySelector('.nav-tab[data-tab="friends"]').click();
+}
+
+document.getElementById("fp-unfriend").addEventListener("click", async () => {
+  if (!currentFriend) return;
+  if (!confirm("Hủy kết bạn với " + currentFriend.name + "?")) return;
+  try {
+    await removeRelation(currentFriend.uid);
+    friendModal.classList.remove("show");
+    goFriendsTab();
+  } catch (e) { alert("Không thể hủy kết bạn lúc này, thử lại sau."); }
+});
+
+document.getElementById("fp-block").addEventListener("click", async () => {
+  if (!currentFriend) return;
+  if (!confirm("Chặn " + currentFriend.name + "? Hai bạn sẽ không còn là bạn bè, họ không thể tìm thấy hay nhắn tin cho bạn nữa.")) return;
+  try {
+    await removeRelation(currentFriend.uid);
+    await db.collection("users").doc(currentUser.uid).update({ blocked: FV().arrayUnion(currentFriend.uid) });
+    friendModal.classList.remove("show");
+    goFriendsTab();
+  } catch (e) { alert("Không thể chặn lúc này, thử lại sau."); }
+});
+
+async function unblockUser(otherUid, btnEl) {
+  btnEl.disabled = true;
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ blocked: FV().arrayRemove(otherUid) });
+    if (document.getElementById("panel-friends").classList.contains("active")) loadFriends();
+    else loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    alert("Không thể bỏ chặn lúc này.");
+  }
+}
+
+// bấm vào tên/avatar trên đầu khung chat riêng -> xem hồ sơ
+["dm-avatar", "dm-name"].forEach(id => {
+  document.getElementById(id).addEventListener("click", () => {
+    if (currentFriend && currentFriend.doc) openFriendProfile(currentFriend.doc);
+  });
+});
+
+function dmChatId(otherUid) {
+  return [currentUser.uid, otherUid].sort().join("_");
+}
+
+function openDM(friend) {
+  currentFriend = friend;
+  currentChat = { type: "dm", id: dmChatId(friend.uid) };
+  sharedNicks = {}; lastChatSnap = null;
+  document.getElementById("dm-theme-btn").style.display = "";
+  document.getElementById("dm-group-btn").style.display = "none";
+  if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+  setAvatar(document.getElementById("dm-avatar"), friend.name, friend.doc && friend.doc.data().photo);
+  document.getElementById("dm-name").textContent = nickFor(friend.uid) || friend.name;
+
+  // giữ tab "Bạn bè" sáng, chuyển sang panel chat riêng
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "friends"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("panel-dm").classList.add("active");
+  document.getElementById("app-screen").classList.add("chat-focus");
+
+  const dmEl = document.getElementById("dm-messages");
+  dmEl.innerHTML = "";
+  applyDMBg("");
+  const unsubMsgs = db.collection("chats").doc(dmChatId(friend.uid)).collection("messages")
+    .orderBy("createdAt", "asc")
+    .limitToLast(200)
+    .onSnapshot((snap) => {
+      const nearBottom = dmEl.scrollHeight - dmEl.scrollTop - dmEl.clientHeight < 120;
+      dmEl.innerHTML = "";
+      if (snap.empty) {
+        dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
+      }
+      snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, false, doc.id, "dm"));
+      const last = snap.docs[snap.docs.length - 1];
+      const lastIsMine = last && last.data().uid === currentUser.uid;
+      if (nearBottom || lastIsMine) dmEl.scrollTop = dmEl.scrollHeight;
+    }, () => {
+      dmEl.innerHTML = '<div class="empty-note">Không tải được tin nhắn, kiểm tra lại quyền (rules) nhé.</div>';
+    });
+
+  // ảnh nền chung của đoạn chat (cả hai cùng thấy)
+  const unsubBg = db.collection("chats").doc(dmChatId(friend.uid)).onSnapshot((doc) => {
+    const d = doc.data() || {};
+    applyDMBg(d.bg || "");
+    sharedNicks = d.nicks || {};
+    refreshChatTitle();
+  }, () => {});
+
+  unsubscribeDM = () => { unsubMsgs(); unsubBg(); };
+}
+
+function applyDMBg(url) {
+  const el = document.getElementById("dm-messages");
+  el.style.background = url
+    ? 'linear-gradient(rgba(8,16,28,.35), rgba(8,16,28,.35)), url("' + url + '") center / cover no-repeat'
+    : "";
+}
+
+/* ---- đổi giao diện đoạn chat ---- */
+const themeModal = document.getElementById("theme-modal");
+document.getElementById("dm-theme-btn").addEventListener("click", () => {
+  if (!currentChat) return;
+  document.getElementById("theme-friend").textContent = currentChat.type === "group" ? (currentChat.name || "nhóm") : (currentFriend ? currentFriend.name : "");
+  themeModal.classList.add("show");
+});
+document.getElementById("theme-close").addEventListener("click", () => themeModal.classList.remove("show"));
+document.getElementById("theme-pick").addEventListener("click", () => document.getElementById("theme-input").click());
+
+function imageToDataURLMax(file, maxSide) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", 0.72));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById("theme-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file || !currentChat) return;
+  try {
+    const dataUrl = await imageToDataURLMax(file, 900);
+    if (dataUrl.length > 700000) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
+    await chatDocRef().set({ bg: dataUrl }, { merge: true });
+    themeModal.classList.remove("show");
+  } catch (err) {
+    alert("Không đổi được ảnh nền lúc này, kiểm tra lại rules hoặc thử ảnh khác.");
+  }
+});
+
+document.getElementById("theme-reset").addEventListener("click", async () => {
+  if (!currentFriend) return;
+  try {
+    await chatDocRef().set({ bg: firebase.firestore.FieldValue.delete() }, { merge: true });
+    themeModal.classList.remove("show");
+  } catch (err) {
+    alert("Không đặt lại được lúc này.");
+  }
+});
+
+document.getElementById("dm-back").addEventListener("click", () => {
+  document.getElementById("app-screen").classList.remove("chat-focus");
+  const isGroup = currentChat && currentChat.type === "group";
+  document.querySelector('.nav-tab[data-tab="' + (isGroup ? "groups" : "friends") + '"]').click();
+});
+
+document.getElementById("dm-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("dm-input");
+  const text = input.value.trim();
+  if (!text || !currentUser || !currentChat) return;
+  input.value = "";
+  input.focus();
+  const msgCol = currentChat.type === "group" ? db.collection("groups").doc(currentChat.id) : db.collection("chats").doc(currentChat.id);
+  msgCol.collection("messages").add({
+    text: text,
+    uid: currentUser.uid,
+    name: currentUser.displayName || currentUser.email.split("@")[0],
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {
+    input.value = text;
+    alert("Gửi tin nhắn thất bại, thử lại nhé.");
+  });
+});
+
+const FV = () => firebase.firestore.FieldValue;
+
+async function sendRequest(otherUid, btnEl) {
+  btnEl.disabled = true;
+  btnEl.textContent = "Đang gửi...";
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ requestsSent: FV().arrayUnion(otherUid) });
+    await db.collection("users").doc(otherUid).update({ requestsReceived: FV().arrayUnion(currentUser.uid) });
+    loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    btnEl.textContent = "+ Kết bạn";
+    alert("Không thể gửi lời mời lúc này, thử lại sau.");
+  }
+}
+
+async function cancelRequest(otherUid, btnEl) {
+  btnEl.disabled = true;
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ requestsSent: FV().arrayRemove(otherUid) });
+    await db.collection("users").doc(otherUid).update({ requestsReceived: FV().arrayRemove(currentUser.uid) });
+    loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    alert("Không thể hủy lời mời lúc này.");
+  }
+}
+
+async function acceptRequest(otherUid, btnEl) {
+  btnEl.disabled = true;
+  btnEl.textContent = "Đang xử lý...";
+  try {
+    await db.collection("users").doc(currentUser.uid).update({
+      friends: FV().arrayUnion(otherUid),
+      requestsReceived: FV().arrayRemove(otherUid)
+    });
+    await db.collection("users").doc(otherUid).update({
+      friends: FV().arrayUnion(currentUser.uid),
+      requestsSent: FV().arrayRemove(currentUser.uid)
+    });
+    loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    btnEl.textContent = "Chấp nhận";
+    alert("Không thể chấp nhận lúc này, thử lại sau.");
+  }
+}
+
+async function declineRequest(otherUid, btnEl) {
+  btnEl.disabled = true;
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ requestsReceived: FV().arrayRemove(otherUid) });
+    await db.collection("users").doc(otherUid).update({ requestsSent: FV().arrayRemove(currentUser.uid) });
+    loadContacts();
+  } catch (e) {
+    btnEl.disabled = false;
+    alert("Không thể từ chối lúc này.");
+  }
+}
+
+/* ---------------- ADMIN PANEL ---------------- */
+async function loadAdminList() {
+  const listEl = document.getElementById("admin-list");
+  listEl.innerHTML = '<div class="empty-note">Đang tải danh sách tài khoản...</div>';
+
+  const snap = await db.collection("users").orderBy("createdAt", "desc").get().catch(() => db.collection("users").get());
+  listEl.innerHTML = "";
+
+  if (snap.empty) {
+    listEl.innerHTML = '<div class="empty-note">Chưa có tài khoản nào.</div>';
+    return;
+  }
+
+  snap.forEach(doc => {
+    const d = doc.data();
+    const row = document.createElement("div");
+    row.className = "admin-row";
+    const created = d.createdAt ? d.createdAt.toDate().toLocaleString("vi-VN") : "Không rõ";
+    const isAdmin = d.email === ADMIN_EMAIL;
+    row.innerHTML = `
+      <div class="a-name">${escapeHtml(d.name || "Ẩn danh")}${isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}</div>
+      <div class="a-email">${escapeHtml(d.email || "")}</div>
+      <div class="a-meta">Tạo lúc: ${created} · UID: ${doc.id}</div>
+    `;
+    listEl.appendChild(row);
+  });
+}
+
+function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* ---------------- BIỆT DANH ---------------- */
+function nickFor(uid) {
+  if (!currentChat) return "";
+  const mine = ((currentUserData && currentUserData.nicks) || {})[currentChat.id] || {};
+  return mine[uid] || sharedNicks[uid] || "";
+}
+function refreshChatTitle() {
+  if (currentChat && currentChat.type === "dm" && currentFriend) {
+    document.getElementById("dm-name").textContent = nickFor(currentFriend.uid) || currentFriend.name;
+  }
+  if (currentChat && currentChat.type === "group" && lastChatSnap) renderChatSnap(lastChatSnap);
+}
+function renderChatSnap(snap) {
+  const dmEl = document.getElementById("dm-messages");
+  const nearBottom = dmEl.scrollHeight - dmEl.scrollTop - dmEl.clientHeight < 120;
+  dmEl.innerHTML = "";
+  if (snap.empty) dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
+  snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, true, doc.id, "dm"));
+  const last = snap.docs[snap.docs.length - 1];
+  if (nearBottom || (last && last.data().uid === currentUser.uid)) dmEl.scrollTop = dmEl.scrollHeight;
+}
+
+const nickModal = document.getElementById("nick-modal");
+function nickTargets() {
+  if (!currentChat) return [];
+  if (currentChat.type === "dm") return currentFriend ? [{ uid: currentFriend.uid, name: currentFriend.name }] : [];
+  return (currentChat.members || []).filter(u => u !== currentUser.uid).map(u => ({ uid: u, name: (usersMap[u] && usersMap[u].name) || "Ẩn danh" }));
+}
+function fillNickInput() {
+  const uid = document.getElementById("nick-target").value;
+  document.getElementById("nick-input").value = nickFor(uid);
+}
+document.getElementById("dm-nick-btn").addEventListener("click", () => {
+  const sel = document.getElementById("nick-target");
+  sel.innerHTML = "";
+  nickTargets().forEach(t => { const o = document.createElement("option"); o.value = t.uid; o.textContent = t.name; sel.appendChild(o); });
+  document.getElementById("nick-shared").textContent = currentChat && currentChat.type === "group" ? "👥 Cả nhóm đều thấy" : "👥 Cả hai đều thấy";
+  fillNickInput();
+  nickModal.classList.add("show");
+});
+document.getElementById("nick-target").addEventListener("change", fillNickInput);
+document.getElementById("nick-close").addEventListener("click", () => nickModal.classList.remove("show"));
+
+async function saveNick(mode) {   // mode: "shared" | "private" | "clear"
+  const uid = document.getElementById("nick-target").value;
+  const nick = document.getElementById("nick-input").value.trim();
+  if (!uid || !currentChat) return;
+  if (mode !== "clear" && !nick) return alert("Nhập biệt danh trước nhé.");
+  const cid = currentChat.id, del = FV().delete();
+  const chatRef = currentChat.type === "group" ? db.collection("groups").doc(cid) : db.collection("chats").doc(cid);
+  const meRef = db.collection("users").doc(currentUser.uid);
+  try {
+    if (mode === "private") {
+      await meRef.set({ nicks: { [cid]: { [uid]: nick } } }, { merge: true });
+      currentUserData.nicks = currentUserData.nicks || {};
+      currentUserData.nicks[cid] = Object.assign({}, currentUserData.nicks[cid], { [uid]: nick });
+    } else {
+      // xóa biệt danh riêng để thấy biệt danh chung
+      await meRef.set({ nicks: { [cid]: { [uid]: del } } }, { merge: true });
+      if (currentUserData.nicks && currentUserData.nicks[cid]) delete currentUserData.nicks[cid][uid];
+      await chatRef.set({ nicks: { [uid]: mode === "shared" ? nick : del } }, { merge: true });
+      if (mode === "shared") sharedNicks[uid] = nick; else delete sharedNicks[uid];
+    }
+    refreshChatTitle();
+    nickModal.classList.remove("show");
+  } catch (e) {
+    alert("Không lưu được biệt danh, kiểm tra lại rules nhé.");
+  }
+}
+document.getElementById("nick-shared").addEventListener("click", () => saveNick("shared"));
+document.getElementById("nick-private").addEventListener("click", () => saveNick("private"));
+document.getElementById("nick-clear").addEventListener("click", () => saveNick("clear"));
+
+/* ---------------- NHÓM ---------------- */
+function listenGroups() {
+  if (unsubscribeGroups) return;
+  const listEl = document.getElementById("groups-list");
+  unsubscribeGroups = db.collection("groups").where("members", "array-contains", currentUser.uid).onSnapshot((snap) => {
+    const docs = snap.docs.slice().sort((a, b) => ((b.data().createdAt && b.data().createdAt.toMillis()) || 0) - ((a.data().createdAt && a.data().createdAt.toMillis()) || 0));
+    listEl.innerHTML = "";
+    if (!docs.length) { listEl.innerHTML = '<div class="empty-note">Chưa có nhóm nào. Bấm "+ Tạo nhóm" nhé!</div>'; return; }
+    docs.forEach(d => {
+      const g = d.data();
+      const card = document.createElement("div");
+      card.className = "contact-card";
+      card.style.cursor = "pointer";
+      const av = document.createElement("div"); av.className = "avatar"; setAvatar(av, g.name || "?", g.photo || "");
+      const info = document.createElement("div"); info.className = "cinfo"; info.style.flex = "1";
+      info.innerHTML = '<div class="cname">' + escapeHtml(g.name || "Nhóm") + '</div><div class="cemail">' + (g.members || []).length + ' thành viên</div>';
+      card.appendChild(av); card.appendChild(info);
+      card.addEventListener("click", () => openGroup(d.id, g));
+      listEl.appendChild(card);
+    });
+  }, () => { listEl.innerHTML = '<div class="empty-note">Không tải được danh sách nhóm, kiểm tra lại rules nhé.</div>'; });
+}
+
+function openGroup(id, g) {
+  if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+  currentFriend = null;
+  currentChat = { type: "group", id: id, members: g.members || [], name: g.name, photo: g.photo || "" };
+  sharedNicks = g.nicks || {}; lastChatSnap = null;
+  setAvatar(document.getElementById("dm-avatar"), g.name, g.photo || "");
+  document.getElementById("dm-name").textContent = g.name || "Nhóm";
+  document.getElementById("dm-theme-btn").style.display = "";
+  document.getElementById("dm-group-btn").style.display = "";
+  document.getElementById("dm-nick-btn").style.marginLeft = "0";
+  applyDMBg(g.bg || "");
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "groups"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("panel-dm").classList.add("active");
+  document.getElementById("app-screen").classList.add("chat-focus");
+  const dmEl = document.getElementById("dm-messages");
+  dmEl.innerHTML = "";
+  const ref = db.collection("groups").doc(id);
+  const u1 = ref.onSnapshot((doc) => {
+    const d = doc.data(); if (!d) return;
+    sharedNicks = d.nicks || {};
+    currentChat.members = d.members || [];
+    currentChat.name = d.name; currentChat.photo = d.photo || "";
+    document.getElementById("dm-name").textContent = d.name || "Nhóm";
+    setAvatar(document.getElementById("dm-avatar"), d.name, d.photo || "");
+    applyDMBg(d.bg || "");
+    refreshChatTitle();
+  }, () => {});
+  const u2 = ref.collection("messages").orderBy("createdAt", "asc").limitToLast(200).onSnapshot((snap) => {
+    lastChatSnap = snap; renderChatSnap(snap);
+  }, () => { dmEl.innerHTML = '<div class="empty-note">Không tải được tin nhắn, kiểm tra lại quyền (rules) nhé.</div>'; });
+  unsubscribeDM = () => { u1(); u2(); };
+}
+
+const groupModal = document.getElementById("group-modal");
+document.getElementById("new-group-btn").addEventListener("click", async () => {
+  const box = document.getElementById("group-friends");
+  document.getElementById("group-name").value = "";
+  document.getElementById("group-err").textContent = "";
+  box.innerHTML = '<div class="empty-note">Đang tải...</div>';
+  groupModal.classList.add("show");
+  try {
+    const me = (await db.collection("users").doc(currentUser.uid).get()).data() || {};
+    const uids = me.friends || [];
+    box.innerHTML = "";
+    if (uids.length < 2) { box.innerHTML = '<div class="empty-note">Bạn cần có ít nhất 2 bạn bè để tạo nhóm.</div>'; return; }
+    uids.forEach(u => {
+      const row = document.createElement("label"); row.className = "chk-row";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = u;
+      const av = document.createElement("div"); av.className = "avatar"; av.style.cssText = "width:32px;height:32px;font-size:13px;";
+      const nm = (usersMap[u] && usersMap[u].name) || "Ẩn danh";
+      setAvatar(av, nm, usersMap[u] && usersMap[u].photo);
+      const t = document.createElement("span"); t.textContent = nm;
+      row.appendChild(cb); row.appendChild(av); row.appendChild(t); box.appendChild(row);
+    });
+  } catch (e) { box.innerHTML = '<div class="empty-note">Không tải được danh sách bạn bè.</div>'; }
+});
+document.getElementById("group-cancel").addEventListener("click", () => groupModal.classList.remove("show"));
+document.getElementById("group-create").addEventListener("click", async () => {
+  const err = document.getElementById("group-err");
+  const name = document.getElementById("group-name").value.trim();
+  const picked = Array.from(document.querySelectorAll("#group-friends input:checked")).map(i => i.value);
+  if (!name) return err.textContent = "Nhập tên nhóm nhé.";
+  if (picked.length < 2) return err.textContent = "Nhóm phải có ít nhất 3 người (bạn + 2 bạn bè).";
+  try {
+    const ref = await db.collection("groups").add({
+      name: name, members: [currentUser.uid].concat(picked), createdBy: currentUser.uid,
+      nicks: {}, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    groupModal.classList.remove("show");
+    const snap = await ref.get();
+    openGroup(ref.id, snap.data() || { name: name, members: [currentUser.uid].concat(picked) });
+  } catch (e) { err.textContent = "Tạo nhóm thất bại, kiểm tra lại rules nhé."; }
+});
+
+/* ---------------- ICON / ẢNH / TỆP ---------------- */
+const EMOJI_LIST = "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😋 😜 🤪 😎 🤩 🥳 😏 😒 😞 😔 😢 😭 😤 😡 🤯 😱 😨 😰 🤗 🤔 🤫 😴 🙄 😬 👍 👎 👏 🙌 🙏 💪 👋 ✌️ 🤝 ❤️ 🧡 💛 💚 💙 💜 🖤 💔 🔥 ✨ 🎉 🎂 🎁 🌹 ☀️ 🌙 ⭐ 🍀 🍕 🍔 🍟 🍺 ☕ ⚽ 🎮 🎵 💯".split(" ");
+const MAX_FILE_BYTES = 650 * 1024;   // Firestore giới hạn ~1MB / tin nhắn
+const MAX_DATA_LEN = 900000;
+function fmtSize(b) { return b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(0) + " KB" : (b / 1048576).toFixed(1) + " MB"; }
+document.getElementById("lightbox").addEventListener("click", () => document.getElementById("lightbox").classList.remove("show"));
+
+const emojiPop = document.getElementById("emoji-pop");
+let emojiTarget = null;
+EMOJI_LIST.forEach(e => {
+  const sp = document.createElement("span"); sp.textContent = e;
+  sp.addEventListener("click", () => {
+    if (!emojiTarget) return;
+    const i = emojiTarget, st = i.selectionStart == null ? i.value.length : i.selectionStart, en = i.selectionEnd == null ? st : i.selectionEnd;
+    i.value = i.value.slice(0, st) + e + i.value.slice(en);
+    i.focus(); i.setSelectionRange(st + e.length, st + e.length);
+  });
+  emojiPop.appendChild(sp);
+});
+document.addEventListener("click", (ev) => {
+  if (!emojiPop.contains(ev.target) && !ev.target.classList.contains("emoji-btn")) emojiPop.classList.remove("show");
+});
+
+function sendExtra(where, extra) {
+  if (!currentUser) return Promise.reject();
+  const base = { uid: currentUser.uid, name: currentUser.displayName || currentUser.email.split("@")[0], createdAt: firebase.firestore.FieldValue.serverTimestamp(), text: "" };
+  let col;
+  if (where === "public") { base.email = currentUser.email; col = db.collection("messages"); }
+  else {
+    if (!currentChat) return Promise.reject();
+    col = (currentChat.type === "group" ? db.collection("groups") : db.collection("chats")).doc(currentChat.id).collection("messages");
+  }
+  return col.add(Object.assign(base, extra));
+}
+function readAsDataURL(file) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onerror = rej; r.onload = () => res(r.result); r.readAsDataURL(file); });
+}
+
+function setupComposer(formId, inputId, where) {
+  const form = document.getElementById(formId), input = document.getElementById(inputId);
+  const sendBtn = form.querySelector('button[type="submit"]');
+  const mk = (label, title, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "tool-btn " + (cls || ""); b.textContent = label; b.title = title; form.insertBefore(b, input); return b; };
+  const emojiBtn = mk("😊", "Icon", "emoji-btn"), imgBtn = mk("🖼️", "Gửi hình ảnh"), fileBtn = mk("📎", "Gửi tệp");
+  const imgIn = document.createElement("input"); imgIn.type = "file"; imgIn.accept = "image/*"; imgIn.style.display = "none";
+  const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.style.display = "none";
+  form.appendChild(imgIn); form.appendChild(fileIn);
+
+  emojiBtn.addEventListener("click", () => {
+    emojiTarget = input;
+    if (emojiPop.classList.contains("show")) return emojiPop.classList.remove("show");
+    const r = emojiBtn.getBoundingClientRect();
+    emojiPop.classList.add("show");
+    emojiPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + "px";
+    emojiPop.style.top = Math.max(8, r.top - emojiPop.offsetHeight - 8) + "px";
+  });
+  imgBtn.addEventListener("click", () => imgIn.click());
+  fileBtn.addEventListener("click", () => fileIn.click());
+
+  imgIn.addEventListener("change", async () => {
+    const f = imgIn.files[0]; imgIn.value = "";
+    if (!f) return;
+    try {
+      let d = await imageToDataURLMax(f, 1000);
+      if (d.length > MAX_DATA_LEN) d = await imageToDataURLMax(f, 640);
+      if (d.length > MAX_DATA_LEN) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
+      await sendExtra(where, { type: "image", image: d });
+    } catch (e) { alert("Không gửi được ảnh, thử lại nhé."); }
+  });
+  fileIn.addEventListener("change", async () => {
+    const f = fileIn.files[0]; fileIn.value = "";
+    if (!f) return;
+    if (f.size > MAX_FILE_BYTES) return uploadBigFile(f, where);
+    try {
+      const d = await readAsDataURL(f);
+      if (d.length > MAX_DATA_LEN) return alert("Tệp quá nặng, chọn tệp nhỏ hơn nhé.");
+      await sendExtra(where, { type: "file", fileName: f.name, fileSize: f.size, fileData: d });
+    } catch (e) { alert("Không gửi được tệp, thử lại nhé."); }
+  });
+}
+setupComposer("chat-form", "msg-input", "public");
+setupComposer("dm-form", "dm-input", "dm");
+
+/* ---------------- CÀI ĐẶT NHÓM + FILE LỚN ---------------- */
+function chatDocRef() {
+  return (currentChat.type === "group" ? db.collection("groups") : db.collection("chats")).doc(currentChat.id);
+}
+const gsetModal = document.getElementById("gset-modal");
+document.getElementById("dm-group-btn").addEventListener("click", () => {
+  if (!currentChat || currentChat.type !== "group") return;
+  document.getElementById("gset-name").value = currentChat.name || "";
+  setAvatar(document.getElementById("gset-avatar"), currentChat.name, currentChat.photo);
+  gsetModal.classList.add("show");
+});
+document.getElementById("gset-close").addEventListener("click", () => gsetModal.classList.remove("show"));
+document.getElementById("gset-save").addEventListener("click", async () => {
+  const name = document.getElementById("gset-name").value.trim();
+  if (!name) return alert("Tên nhóm không được để trống.");
+  try { await chatDocRef().update({ name: name }); gsetModal.classList.remove("show"); }
+  catch (e) { alert("Không đổi được tên nhóm, kiểm tra lại rules nhé."); }
+});
+document.getElementById("gset-photo").addEventListener("click", () => document.getElementById("gset-input").click());
+document.getElementById("gset-input").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f || !currentChat) return;
+  try {
+    const d = await imageToDataURLMax(f, 256);
+    await chatDocRef().update({ photo: d });
+    setAvatar(document.getElementById("gset-avatar"), currentChat.name, d);
+  } catch (err) { alert("Không đổi được ảnh nhóm lúc này."); }
+});
+document.getElementById("gset-photo-del").addEventListener("click", async () => {
+  try {
+    await chatDocRef().update({ photo: firebase.firestore.FieldValue.delete() });
+    setAvatar(document.getElementById("gset-avatar"), currentChat.name, "");
+  } catch (err) { alert("Không xóa được ảnh nhóm lúc này."); }
+});
+
+// File lớn: đẩy lên Firebase Storage, tin nhắn chỉ lưu link
+const MAX_BIG_BYTES = 500 * 1024 * 1024;
+function uploadBigFile(file, where) {
+  let storage;
+  try { storage = firebase.storage(); } catch (e) { return alert("Chưa bật Firebase Storage cho project này."); }
+  if (file.size > MAX_BIG_BYTES) return alert("Tệp quá lớn, tối đa 500 MB.");
+  const toast = document.getElementById("upload-toast");
+  const safe = file.name.replace(/[^\w.\-]+/g, "_");
+  const ref = storage.ref("uploads/" + currentUser.uid + "/" + Date.now() + "_" + safe);
+  const task = ref.put(file);
+  toast.style.display = "block"; toast.textContent = "Đang tải lên 0%";
+  task.on("state_changed",
+    (sn) => { toast.textContent = "Đang tải lên " + Math.round(sn.bytesTransferred / sn.totalBytes * 100) + "% · " + file.name; },
+    () => { toast.style.display = "none"; alert("Tải tệp lên thất bại. Kiểm tra Storage rules hoặc gói Firebase nhé."); },
+    async () => {
+      try {
+        const url = await ref.getDownloadURL();
+        await sendExtra(where, { type: "file", fileName: file.name, fileSize: file.size, fileURL: url });
+      } catch (e) { alert("Gửi tệp thất bại."); }
+      toast.style.display = "none";
+    });
+}
+</script>
+
+
+<div id="site-credit">Web được làm bởi @HuuDuong ( vua36)</div>
+</body>
+</html>
