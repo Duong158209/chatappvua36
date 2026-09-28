@@ -311,7 +311,7 @@
 <div class="modal-overlay" id="theme-modal">
   <div class="modal-box">
     <h3>Giao diện đoạn chat</h3>
-    <p>Ảnh nền này chỉ mình bạn thấy trong đoạn chat với <b id="theme-friend"></b>.</p>
+    <p>Ảnh nền này cả hai bạn đều thấy trong đoạn chat với <b id="theme-friend"></b>.</p>
     <button class="modal-btn-primary" id="theme-pick" style="margin-top:0;">🖼️ Chọn ảnh nền</button>
     <button class="modal-btn-soft" id="theme-reset" style="width:100%; margin-top:8px;">Đặt lại mặc định</button>
     <button class="modal-btn-close" id="theme-close">Đóng</button>
@@ -1146,10 +1146,10 @@ function openDM(friend) {
       dmEl.innerHTML = '<div class="empty-note">Không tải được tin nhắn, kiểm tra lại quyền (rules) nhé.</div>';
     });
 
-  // ảnh nền riêng của mình cho đoạn chat này
+  // ảnh nền chung của đoạn chat (cả hai cùng thấy)
   const unsubBg = db.collection("chats").doc(dmChatId(friend.uid)).onSnapshot((doc) => {
     const d = doc.data() || {};
-    applyDMBg(d["bg_" + currentUser.uid] || "");
+    applyDMBg(d.bg || "");
   }, () => {});
 
   unsubscribeDM = () => { unsubMsgs(); unsubBg(); };
@@ -1199,7 +1199,7 @@ document.getElementById("theme-input").addEventListener("change", async (e) => {
   try {
     const dataUrl = await imageToDataURLMax(file, 900);
     if (dataUrl.length > 700000) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
-    await db.collection("chats").doc(dmChatId(currentFriend.uid)).set({ ["bg_" + currentUser.uid]: dataUrl }, { merge: true });
+    await db.collection("chats").doc(dmChatId(currentFriend.uid)).set({ bg: dataUrl }, { merge: true });
     themeModal.classList.remove("show");
   } catch (err) {
     alert("Không đổi được ảnh nền lúc này, kiểm tra lại rules hoặc thử ảnh khác.");
@@ -1209,7 +1209,7 @@ document.getElementById("theme-input").addEventListener("change", async (e) => {
 document.getElementById("theme-reset").addEventListener("click", async () => {
   if (!currentFriend) return;
   try {
-    await db.collection("chats").doc(dmChatId(currentFriend.uid)).set({ ["bg_" + currentUser.uid]: firebase.firestore.FieldValue.delete() }, { merge: true });
+    await db.collection("chats").doc(dmChatId(currentFriend.uid)).set({ bg: firebase.firestore.FieldValue.delete() }, { merge: true });
     themeModal.classList.remove("show");
   } catch (err) {
     alert("Không đặt lại được lúc này.");
