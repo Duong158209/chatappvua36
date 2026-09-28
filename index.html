@@ -54,6 +54,13 @@
   .a-on { color: #31a24c; font-weight: 700; }
   .a-off { color: #999; }
   .seen-line { font-size: 10px; color: #c7b3e8; text-align: right; margin: -4px 4px 8px 0; }
+  .seen-avs { display: flex; justify-content: flex-end; gap: 3px; padding: 0 10px 8px; flex-wrap: wrap; }
+  .seen-avs .mini-seen {
+    width: 16px; height: 16px; border-radius: 50%; font-size: 8px; font-weight: 700;
+    overflow: hidden; background: #7c5cbf; color: #fff;
+    display: flex; align-items: center; justify-content: center; border: 1.5px solid #fff;
+  }
+  .seen-avs .mini-seen img { width: 100%; height: 100%; object-fit: cover; display: block; }
   #profile-trigger { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; background: none; border: none; text-align: left; padding: 0; }
   #profile-trigger:active { opacity: 0.7; }
   .avatar {
@@ -661,6 +668,17 @@
       <span><div class="t-title">Giao diện tối</div><div class="t-desc">Nền tối cho toàn app</div></span>
       <input type="checkbox" id="set-dark">
     </label>
+    <div id="admin-set-box" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid #eee;">
+      <div class="t-title" style="margin-bottom:8px;">Quyền quản trị</div>
+      <label class="toggle-row">
+        <span><div class="t-title">Xem đã xem (bỏ qua tắt)</div><div class="t-desc">Thấy ai đã xem dù họ tắt hiện đã xem</div></span>
+        <input type="checkbox" id="set-admin-seen" checked>
+      </label>
+      <label class="toggle-row">
+        <span><div class="t-title">Xem hoạt động (bỏ qua tắt)</div><div class="t-desc">Thấy online dù họ tắt trạng thái</div></span>
+        <input type="checkbox" id="set-admin-act" checked>
+      </label>
+    </div>
     <button class="modal-btn-soft" id="set-notify" style="width:100%;margin-top:10px;">🔔 Bật thông báo tin nhắn</button>
     <button class="modal-btn-close" id="settings-close">Đóng</button>
   </div>
@@ -709,14 +727,16 @@ function isUserOnline(d) {
   if (!d || !d.lastSeen || typeof d.lastSeen.toMillis !== "function") return false;
   return Date.now() - d.lastSeen.toMillis() < 2 * 60 * 1000;
 }
+function adminSeeActivity() { return iAmAdmin() && !(currentUserData && currentUserData.adminBypassActivity === false); }
+function adminSeeReads() { return iAmAdmin() && !(currentUserData && currentUserData.adminBypassSeen === false); }
 function visibleOnline(d) {
   if (!d) return false;
-  if (iAmAdmin()) return isUserOnline(d);
-  return isUserOnline(d) && !d.hideActivity;
+  if (d.hideActivity && !adminSeeActivity()) return false;
+  return isUserOnline(d);
 }
 function activityLabel(d) {
   if (!d) return "";
-  if (d.hideActivity && !iAmAdmin()) return "";
+  if (d.hideActivity && !adminSeeActivity()) return "";
   if (!d.lastSeen || typeof d.lastSeen.toMillis !== "function") return "";
   const ms = Date.now() - d.lastSeen.toMillis();
   if (ms < 2 * 60 * 1000) return "🟢 Đang hoạt động";
@@ -867,7 +887,27 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   document.getElementById("set-activity").checked = !(currentUserData && currentUserData.hideActivity);
   document.getElementById("set-seen").checked = !(currentUserData && currentUserData.hideSeen);
   document.getElementById("set-dark").checked = document.body.classList.contains("dark");
+  const box = document.getElementById("admin-set-box");
+  if (iAmAdmin()) {
+    box.style.display = "block";
+    document.getElementById("set-admin-seen").checked = !(currentUserData && currentUserData.adminBypassSeen === false);
+    document.getElementById("set-admin-act").checked = !(currentUserData && currentUserData.adminBypassActivity === false);
+  } else box.style.display = "none";
   settingsModal.classList.add("show");
+});
+document.getElementById("set-admin-seen").addEventListener("change", async (e) => {
+  if (!currentUser || !iAmAdmin()) return;
+  await db.collection("users").doc(currentUser.uid).set({ adminBypassSeen: e.target.checked }, { merge: true });
+  currentUserData.adminBypassSeen = e.target.checked;
+  if (lastChatSnap) renderChatSnap(lastChatSnap);
+  if (lastPublicSnap) renderPublic(lastPublicSnap);
+});
+document.getElementById("set-admin-act").addEventListener("change", async (e) => {
+  if (!currentUser || !iAmAdmin()) return;
+  await db.collection("users").doc(currentUser.uid).set({ adminBypassActivity: e.target.checked }, { merge: true });
+  currentUserData.adminBypassActivity = e.target.checked;
+  refreshDmStatus();
+  if (document.getElementById("panel-friends").classList.contains("active")) loadFriends();
 });
 document.getElementById("set-dark").addEventListener("change", (e) => applyTheme(e.target.checked));
 document.getElementById("set-notify").addEventListener("click", requestNotifyPerm);
@@ -1064,6 +1104,7 @@ auth.onAuthStateChanged(async (user) => {
     listenOnlineUsers();
     listenMessages();
     listenGroups();
+    listenPublicReads();
     loadFriends();
     setTimeout(() => { notifyReady = true; }, 2000);
     if (window.Notification && Notification.permission === "default") {
@@ -1107,7 +1148,7 @@ function listenOnlineUsers() {
       if (visibleOnline(d)) count++;
       const nm = d.name || "", ph = d.photo || "";
       const prev = usersMap[doc.id];
-      usersMap[doc.id] = { name: nm, photo: ph, lastSeen: d.lastSeen, hideActivity: !!d.hideActivity, email: d.email || "" };
+      usersMap[doc.id] = { name: nm, photo: ph, lastSeen: d.lastSeen, hideActivity: !!d.hideActivity, hideSeen: !!d.hideSeen, email: d.email || "" };
       if (!prev || prev.name !== nm || prev.photo !== ph) changed = true;
     });
     if (changed && lastPublicSnap) renderPublic(lastPublicSnap);
@@ -1129,6 +1170,9 @@ function renderPublic(snap) {
   });
   const last = snap.docs[snap.docs.length - 1];
   const lastIsMine = last && currentUser && last.data().uid === currentUser.uid;
+  if (last && last.data().createdAt && last.data().createdAt.toMillis) {
+    appendSeenAvatars(messagesEl, last.data().createdAt.toMillis(), publicReads);
+  }
   if (nearBottom || lastIsMine) messagesEl.scrollTop = messagesEl.scrollHeight;
   updateWorldUnread(snap);
 }
@@ -1151,13 +1195,50 @@ function updateWorldUnread(snap) {
   if (n < 1) el.style.display = "none";
   else { el.style.display = "inline-block"; el.textContent = fmtUnread(n); }
 }
+let publicReads = {};
+let unsubscribePublicReads = null;
+function listenPublicReads() {
+  if (unsubscribePublicReads) return;
+  unsubscribePublicReads = db.collection("meta").doc("public").onSnapshot((d) => {
+    publicReads = (d.exists && d.data() && d.data().reads) || {};
+    if (lastPublicSnap) renderPublic(lastPublicSnap);
+  }, () => {});
+}
 function markWorldRead() {
   if (!currentUser) return;
   db.collection("users").doc(currentUser.uid).set({
     worldRead: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true }).catch(function () {});
+  const o = {}; o[currentUser.uid] = firebase.firestore.FieldValue.serverTimestamp();
+  db.collection("meta").doc("public").set({ reads: o }, { merge: true }).catch(function () {});
   const el = document.getElementById("world-unread");
   if (el) el.style.display = "none";
+}
+function canShowReader(uid) {
+  if (!currentUser || uid === currentUser.uid) return false;
+  const d = usersMap[uid] || {};
+  if (d.hideSeen && !adminSeeReads()) return false;
+  return true;
+}
+function appendSeenAvatars(container, lastMs, reads) {
+  if (!container || !lastMs) return;
+  const row = document.createElement("div");
+  row.className = "seen-avs";
+  let n = 0;
+  Object.keys(reads || {}).forEach((uid) => {
+    if (!canShowReader(uid)) return;
+    const r = reads[uid];
+    const ms = r && r.toMillis ? r.toMillis() : 0;
+    if (ms + 800 < lastMs) return;
+    const av = document.createElement("div");
+    av.className = "mini-seen";
+    const u = usersMap[uid] || {};
+    setAvatar(av, u.name || "?", u.photo || "");
+    av.title = u.name || "";
+    row.appendChild(av);
+    n++;
+  });
+  if (n) container.appendChild(row);
 }
 
 const seenNotify = {};
@@ -2219,21 +2300,8 @@ function renderChatSnap(snap) {
   if (snap.empty) dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
   snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, true, doc.id, "dm"));
   const last = snap.docs[snap.docs.length - 1];
-  if (last && currentUser && last.data().uid === currentUser.uid && !(currentUserData && currentUserData.hideSeen)) {
-    const t = last.data().createdAt && last.data().createdAt.toMillis ? last.data().createdAt.toMillis() : 0;
-    let seen = false;
-    Object.keys(chatReads || {}).forEach((uid) => {
-      if (uid === currentUser.uid) return;
-      const r = chatReads[uid];
-      const ms = r && r.toMillis ? r.toMillis() : 0;
-      if (ms >= t) seen = true;
-    });
-    if (seen) {
-      const s = document.createElement("div");
-      s.className = "seen-line";
-      s.textContent = "Đã xem";
-      dmEl.appendChild(s);
-    }
+  if (last && last.data().createdAt && last.data().createdAt.toMillis) {
+    appendSeenAvatars(dmEl, last.data().createdAt.toMillis(), chatReads);
   }
   if (nearBottom || (last && last.data().uid === currentUser.uid)) dmEl.scrollTop = dmEl.scrollHeight;
 }
