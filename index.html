@@ -54,6 +54,15 @@
   .a-on { color: #31a24c; font-weight: 700; }
   .a-off { color: #999; }
   .seen-line { font-size: 10px; color: #c7b3e8; text-align: right; margin: -4px 4px 8px 0; }
+  .plus-sheet { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 8000; padding: 12px 12px 28px; background: #1c1c1e; border-radius: 16px 16px 0 0; }
+  .plus-sheet.show { display: block; }
+  .plus-sheet button { width: 100%; text-align: left; padding: 14px 16px; border: none; background: transparent; color: #f5f5f7; font-size: 16px; border-bottom: 1px solid #2c2c2e; }
+  .plus-sheet button:last-child { border-bottom: none; color: #ff3b30; }
+  .poll-box { min-width: 180px; }
+  .poll-box .pq { font-weight: 700; margin-bottom: 8px; }
+  .poll-opt { display: block; width: 100%; margin: 4px 0; padding: 8px 10px; border-radius: 10px; border: none; background: rgba(255,255,255,.18); color: inherit; text-align: left; font-size: 13px; }
+  .poll-opt.picked { outline: 2px solid #fff; }
+  .loc-card { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; font-weight: 600; }
   .seen-avs { display: flex; justify-content: flex-end; gap: 3px; padding: 0 10px 8px; flex-wrap: wrap; }
   .seen-avs .mini-seen {
     width: 16px; height: 16px; border-radius: 50%; font-size: 8px; font-weight: 700;
@@ -549,6 +558,19 @@
 </div>
 
 <div id="emoji-pop"></div>
+<div class="plus-sheet" id="plus-sheet"></div>
+<div class="modal-overlay" id="poll-modal">
+  <div class="modal-box" style="text-align:left;">
+    <h3 style="text-align:center;">Tạo cuộc bỏ phiếu</h3>
+    <input id="poll-q" class="mini-input" placeholder="Câu hỏi" maxlength="80" style="width:100%;margin:8px 0;padding:10px;border-radius:10px;border:1px solid #ddd;">
+    <input class="poll-opt-in mini-input" placeholder="Lựa chọn 1" maxlength="40" style="width:100%;margin:6px 0;padding:10px;border-radius:10px;border:1px solid #ddd;">
+    <input class="poll-opt-in mini-input" placeholder="Lựa chọn 2" maxlength="40" style="width:100%;margin:6px 0;padding:10px;border-radius:10px;border:1px solid #ddd;">
+    <input class="poll-opt-in mini-input" placeholder="Lựa chọn 3 (không bắt buộc)" maxlength="40" style="width:100%;margin:6px 0;padding:10px;border-radius:10px;border:1px solid #ddd;">
+    <input class="poll-opt-in mini-input" placeholder="Lựa chọn 4 (không bắt buộc)" maxlength="40" style="width:100%;margin:6px 0;padding:10px;border-radius:10px;border:1px solid #ddd;">
+    <button class="modal-btn-primary" id="poll-create">Đăng</button>
+    <button class="modal-btn-close" id="poll-cancel">Hủy</button>
+  </div>
+</div>
 <div id="upload-toast" style="display:none; position:fixed; left:50%; bottom:44px; transform:translateX(-50%); background:#222; color:white; padding:10px 16px; border-radius:20px; font-size:13px; z-index:700;"></div>
 <div class="modal-overlay" id="gset-modal">
   <div class="modal-box">
@@ -1173,8 +1195,7 @@ function renderPublic(snap) {
   });
   const last = snap.docs[snap.docs.length - 1];
   const lastIsMine = last && currentUser && last.data().uid === currentUser.uid;
-  const ownT = lastOwnTime(snap);
-  if (ownT) appendSeenAvatars(messagesEl, ownT, publicReads);
+  placeSeenAvatars(messagesEl, snap, publicReads);
   if (nearBottom || lastIsMine) messagesEl.scrollTop = messagesEl.scrollHeight;
   updateWorldUnread(snap);
   if (document.getElementById("panel-chat").classList.contains("active")) bumpReadNow();
@@ -1242,25 +1263,42 @@ function lastOwnTime(snap) {
   }
   return 0;
 }
-function appendSeenAvatars(container, lastMs, reads) {
-  if (!container || !lastMs) return;
-  const row = document.createElement("div");
-  row.className = "seen-avs";
-  let n = 0;
+function placeSeenAvatars(container, snap, reads) {
+  if (!container || !snap) return;
+  const byMsg = {};
   Object.keys(reads || {}).forEach((uid) => {
     if (!canShowReader(uid)) return;
     const r = reads[uid];
     const ms = r && r.toMillis ? r.toMillis() : 0;
-    if (!ms || ms + 20000 < lastMs) return;
-    const av = document.createElement("div");
-    av.className = "mini-seen";
-    const u = usersMap[uid] || {};
-    setAvatar(av, u.name || uid.slice(0, 1), u.photo || "");
-    av.title = u.name || "Đã xem";
-    row.appendChild(av);
-    n++;
+    if (!ms) return;
+    let hit = null;
+    snap.docs.forEach((doc) => {
+      const m = doc.data();
+      if (m.recalled || m.type === "recalled") return;
+      const t = snapTime(m);
+      if (t && t <= ms + 2000) hit = doc.id;
+    });
+    if (!hit) return;
+    (byMsg[hit] = byMsg[hit] || []).push(uid);
   });
-  if (n) container.appendChild(row);
+  Object.keys(byMsg).forEach((mid) => {
+    const msgRow = container.querySelector('.msg-row[data-id="' + mid + '"]');
+    if (!msgRow) return;
+    const wrap = document.createElement("div");
+    wrap.className = "seen-avs";
+    wrap.style.justifyContent = msgRow.classList.contains("me") ? "flex-end" : "flex-start";
+    byMsg[mid].forEach((uid) => {
+      const av = document.createElement("div");
+      av.className = "mini-seen";
+      const u = usersMap[uid] || {};
+      setAvatar(av, u.name || uid.slice(0, 1), u.photo || "");
+      av.title = (u.name || "Đã xem");
+      wrap.appendChild(av);
+    });
+    let after = msgRow.nextSibling;
+    if (after && after.classList && after.classList.contains("msg-meta")) after = after.nextSibling;
+    container.insertBefore(wrap, after);
+  });
 }
 let lastReadBump = 0;
 function isLookingAtChat() {
@@ -1400,6 +1438,9 @@ function renderMessage(m, pending, container, group, msgId, scope) {
 
   const row = document.createElement("div");
   row.className = "msg-row " + (isMe ? "me" : "other");
+  if (msgId) row.dataset.id = msgId;
+  const ts = snapTime(m);
+  if (ts) row.dataset.ms = String(ts);
 
   if (!isMe) {
     const mini = document.createElement("div");
@@ -1442,6 +1483,32 @@ function renderMessage(m, pending, container, group, msgId, scope) {
     const fs = document.createElement("div"); fs.className = "fs"; fs.textContent = fmtSize(m.fileSize || 0) + " · bấm để tải";
     box.appendChild(fn); box.appendChild(fs); a.appendChild(ic); a.appendChild(box);
     bubble.appendChild(a);
+  } else if (m.type === "location" && m.lat != null) {
+    const a = document.createElement("a");
+    a.className = "loc-card";
+    a.target = "_blank"; a.rel = "noopener";
+    a.href = "https://maps.apple.com/?ll=" + m.lat + "," + m.lng + "&q=" + encodeURIComponent(m.text || "Vị trí");
+    a.innerHTML = "<span>📍</span><span>" + escapeHtml(m.text || "Vị trí đang chia sẻ") + "</span>";
+    bubble.appendChild(a);
+  } else if (m.type === "poll" && Array.isArray(m.pollOpts)) {
+    const box = document.createElement("div");
+    box.className = "poll-box";
+    const pq = document.createElement("div"); pq.className = "pq"; pq.textContent = m.pollQ || m.text || "Bỏ phiếu";
+    box.appendChild(pq);
+    const votes = m.pollVotes || {};
+    const counts = m.pollOpts.map(() => 0);
+    Object.keys(votes).forEach((u) => { const i = votes[u]; if (counts[i] != null) counts[i]++; });
+    const total = Object.keys(votes).length;
+    const mine = currentUser ? votes[currentUser.uid] : undefined;
+    m.pollOpts.forEach((opt, idx) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "poll-opt" + (mine === idx ? " picked" : "");
+      b.textContent = opt + "  ·  " + counts[idx] + (total ? (" (" + Math.round(counts[idx] * 100 / total) + "%)") : "");
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); votePoll(scope || (messagesEl.id === "dm-messages" ? "dm" : "public"), msgId, idx); });
+      box.appendChild(b);
+    });
+    bubble.appendChild(box);
   } else {
     bubble.textContent = m.text;
   }
@@ -2327,8 +2394,7 @@ function renderChatSnap(snap) {
   if (snap.empty) dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
   snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, true, doc.id, "dm"));
   const last = snap.docs[snap.docs.length - 1];
-  const ownT = lastOwnTime(snap);
-  if (ownT) appendSeenAvatars(dmEl, ownT, chatReads);
+  placeSeenAvatars(dmEl, snap, chatReads);
   if (nearBottom || (last && last.data().uid === currentUser.uid)) dmEl.scrollTop = dmEl.scrollHeight;
   bumpReadNow();
 }
@@ -2539,6 +2605,57 @@ document.addEventListener("click", (ev) => {
   if (!emojiPop.contains(ev.target) && !ev.target.classList.contains("emoji-btn")) emojiPop.classList.remove("show");
 });
 
+function votePoll(scope, msgId, idx) {
+  if (!currentUser || !msgId) return;
+  const col = messageColRef(scope === "public" ? "public" : "dm");
+  if (!col) return;
+  col.doc(msgId).set({ pollVotes: { [currentUser.uid]: idx } }, { merge: true }).catch(() => alert("Không bỏ phiếu được."));
+}
+function sendLocation(where) {
+  if (!navigator.geolocation) return alert("Máy không hỗ trợ vị trí.");
+  navigator.geolocation.getCurrentPosition((pos) => {
+    sendExtra(where, {
+      type: "location",
+      text: "Vị trí đang chia sẻ",
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude
+    }).catch(() => alert("Không gửi được vị trí."));
+  }, () => alert("Không lấy được vị trí. Cho phép Quyền vị trí rồi thử lại."), { enableHighAccuracy: true, timeout: 12000 });
+}
+let pollWhere = "public";
+function openPollModal(where) {
+  pollWhere = where;
+  document.getElementById("poll-q").value = "";
+  document.querySelectorAll(".poll-opt-in").forEach((el, i) => { el.value = ""; });
+  document.getElementById("poll-modal").classList.add("show");
+}
+document.getElementById("poll-cancel").addEventListener("click", () => document.getElementById("poll-modal").classList.remove("show"));
+document.getElementById("poll-create").addEventListener("click", () => {
+  const q = document.getElementById("poll-q").value.trim();
+  const opts = Array.from(document.querySelectorAll(".poll-opt-in")).map((el) => el.value.trim()).filter(Boolean);
+  if (!q) return alert("Nhập câu hỏi.");
+  if (opts.length < 2) return alert("Cần ít nhất 2 lựa chọn.");
+  sendExtra(pollWhere, { type: "poll", text: q, pollQ: q, pollOpts: opts, pollVotes: {} })
+    .then(() => document.getElementById("poll-modal").classList.remove("show"))
+    .catch(() => alert("Không tạo được bình chọn."));
+});
+function openPlusSheet(where, fileIn) {
+  const sheet = document.getElementById("plus-sheet");
+  const kind = where === "public" ? "public" : (currentChat && currentChat.type === "group" ? "group" : "dm");
+  sheet.innerHTML = "";
+  const add = (label, fn) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = label;
+    b.addEventListener("click", () => { sheet.classList.remove("show"); fn(); });
+    sheet.appendChild(b);
+  };
+  add("📄 Tệp", () => fileIn.click());
+  if (kind === "dm" || kind === "group") add("📍 Vị trí", () => sendLocation(where));
+  if (kind === "group" || kind === "public") add("📊 Bỏ phiếu", () => openPollModal(where));
+  add("Hủy", () => {});
+  sheet.classList.add("show");
+}
+
 function sendExtra(where, extra) {
   if (!currentUser) return Promise.reject();
   const base = { uid: currentUser.uid, name: currentUser.displayName || currentUser.email.split("@")[0], createdAt: firebase.firestore.FieldValue.serverTimestamp(), text: "" };
@@ -2652,7 +2769,10 @@ function setupComposer(formId, inputId, where) {
 
   const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.accept = "*/*"; fileIn.style.display = "none";
   const camIn = document.createElement("input"); camIn.type = "file"; camIn.accept = "image/*"; camIn.setAttribute("capture", "environment"); camIn.style.display = "none";
-  const galIn = document.createElement("input"); galIn.type = "file"; galIn.accept = "image/*"; galIn.style.display = "none";
+  const galIn = document.createElement("input");
+  galIn.type = "file";
+  galIn.accept = ".jpg,.jpeg,.png,.gif,.webp,.heic,.heif";
+  galIn.style.display = "none";
   form.appendChild(fileIn); form.appendChild(camIn); form.appendChild(galIn);
 
   const syncSend = () => {
@@ -2676,9 +2796,13 @@ function setupComposer(formId, inputId, where) {
     emojiPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + "px";
     emojiPop.style.top = Math.max(8, r.top - emojiPop.offsetHeight - 8) + "px";
   });
-  plusBtn.addEventListener("click", () => fileIn.click());
+  plusBtn.addEventListener("click", () => openPlusSheet(where, fileIn));
   camBtn.addEventListener("click", () => camIn.click());
-  galBtn.addEventListener("click", () => galIn.click());
+  galBtn.addEventListener("click", () => {
+    galIn.value = "";
+    galIn.removeAttribute("capture");
+    galIn.click();
+  });
   bindVoiceBtn(micBtn, where);
 
   const onPick = async (f) => {
