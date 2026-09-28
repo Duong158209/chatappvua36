@@ -189,6 +189,17 @@
   #dm-avatar, #dm-name { cursor: pointer; }
   .chev { color: #bbb; font-size: 22px; padding: 0 6px; }
   .back-btn { border: none; background: none; font-size: 22px; cursor: pointer; color: #764ba2; padding: 0 4px; }
+  #chat-more-menu {
+    display: none; position: fixed; z-index: 5100;
+    background: #fff; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,.22); min-width: 210px;
+  }
+  #chat-more-menu.show { display: block; }
+  #chat-more-menu button {
+    display: block; width: 100%; text-align: left; border: none; background: #fff;
+    padding: 13px 16px; font-size: 15px; cursor: pointer;
+  }
+  #chat-more-menu button:active { background: #f3ecfc; }
   .empty-note { text-align: center; color: #999; font-size: 13px; margin: 20px 8px; padding: 0 12px; line-height: 1.5; }
 
   /* admin */
@@ -364,9 +375,10 @@
         <button class="back-btn" id="dm-back" title="Quay lại">←</button>
         <div class="avatar" id="dm-avatar">?</div>
         <div><div class="title" id="dm-name">—</div></div>
-        <button class="back-btn" id="dm-group-btn" title="Cài đặt nhóm" style="display:none; margin-left:auto;">⚙️</button>
-        <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh">✏️</button>
-        <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat">🎨</button>
+        <button class="back-btn" id="chat-more" title="Thêm" style="margin-left:auto;">⋯</button>
+        <button class="back-btn" id="dm-group-btn" title="Cài đặt nhóm" style="display:none;">⚙️</button>
+        <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh" style="display:none;">✏️</button>
+        <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat" style="display:none;">🎨</button>
       </div>
       <div id="dm-messages"></div>
       <form id="dm-form">
@@ -549,6 +561,11 @@
   </div>
 </div>
 
+<div id="chat-more-menu">
+  <button type="button" id="more-group">⚙️ Cài đặt nhóm</button>
+  <button type="button" id="more-nick">✏️ Đặt biệt danh</button>
+  <button type="button" id="more-theme">🎨 Đổi ảnh nền</button>
+</div>
 <div id="msg-action">
   <button type="button" id="ma-me">Ẩn với mình</button>
   <button type="button" id="ma-all" class="danger">Thu hồi với mọi người</button>
@@ -1583,8 +1600,9 @@ function openDM(friend) {
   sharedNicks = {}; lastChatSnap = null;
   listenChatReads();
   markChatRead();
-  document.getElementById("dm-theme-btn").style.display = "";
+  document.getElementById("dm-theme-btn").style.display = "none";
   document.getElementById("dm-group-btn").style.display = "none";
+  document.getElementById("more-group").style.display = "none";
   if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
   setAvatar(document.getElementById("dm-avatar"), friend.name, friend.doc && friend.doc.data().photo);
   document.getElementById("dm-name").textContent = nickFor(friend.uid) || friend.name;
@@ -1704,6 +1722,23 @@ document.getElementById("chat-back").addEventListener("click", () => {
   document.getElementById("app-screen").classList.remove("chat-focus");
   document.querySelector('.nav-tab[data-tab="friends"]').click();
 });
+
+const chatMoreMenu = document.getElementById("chat-more-menu");
+document.getElementById("chat-more").addEventListener("click", (e) => {
+  e.preventDefault(); e.stopPropagation();
+  const r = e.currentTarget.getBoundingClientRect();
+  chatMoreMenu.classList.add("show");
+  const w = 220;
+  let x = r.right - w, y = r.bottom + 6;
+  if (x < 8) x = 8;
+  if (y + 160 > window.innerHeight) y = r.top - 160;
+  chatMoreMenu.style.left = x + "px";
+  chatMoreMenu.style.top = y + "px";
+});
+document.getElementById("more-group").addEventListener("click", (e) => { e.stopPropagation(); chatMoreMenu.classList.remove("show"); document.getElementById("dm-group-btn").click(); });
+document.getElementById("more-nick").addEventListener("click", (e) => { e.stopPropagation(); chatMoreMenu.classList.remove("show"); document.getElementById("dm-nick-btn").click(); });
+document.getElementById("more-theme").addEventListener("click", (e) => { e.stopPropagation(); chatMoreMenu.classList.remove("show"); document.getElementById("dm-theme-btn").click(); });
+document.addEventListener("click", () => { if (chatMoreMenu) chatMoreMenu.classList.remove("show"); });
 
 document.getElementById("dm-back").addEventListener("click", () => {
   document.getElementById("app-screen").classList.remove("chat-focus");
@@ -1955,9 +1990,9 @@ function openGroup(id, g) {
   markChatRead();
   setAvatar(document.getElementById("dm-avatar"), g.name, g.photo || "");
   document.getElementById("dm-name").textContent = g.name || "Nhóm";
-  document.getElementById("dm-theme-btn").style.display = "";
-  document.getElementById("dm-group-btn").style.display = "";
-  document.getElementById("dm-nick-btn").style.marginLeft = "0";
+  document.getElementById("dm-theme-btn").style.display = "none";
+  document.getElementById("dm-group-btn").style.display = "none";
+  document.getElementById("more-group").style.display = "block";
   applyDMBg(g.bg || "");
   document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "groups"));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
