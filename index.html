@@ -40,7 +40,15 @@
   .sidebar-header { padding: 16px; border-bottom: 1px solid #eee; }
   .sidebar-header h2 { font-size: 18px; color: #050505; }
 
-  .me-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #f0f0f0; }
+  .me-row { display: flex; align-items: center; gap: 8px; padding: 14px 12px 14px 16px; border-bottom: 1px solid #f0f0f0; }
+  #settings-btn { border: none; background: #f0f0f2; width: 36px; height: 36px; border-radius: 10px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; text-align: left; border-bottom: 1px solid #f0f0f0; }
+  .toggle-row .t-title { font-size: 14px; font-weight: 600; color: #222; }
+  .toggle-row .t-desc { font-size: 12px; color: #888; margin-top: 2px; }
+  .online-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #31a24c; margin-right: 5px; }
+  .a-on { color: #31a24c; font-weight: 700; }
+  .a-off { color: #999; }
+  .seen-line { font-size: 10px; color: #c7b3e8; text-align: right; margin: -4px 4px 8px 0; }
   #profile-trigger { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; background: none; border: none; text-align: left; padding: 0; }
   #profile-trigger:active { opacity: 0.7; }
   .avatar {
@@ -103,6 +111,10 @@
   }
 
   #chat-form button.tool-btn, #dm-form button.tool-btn { background: #f0f0f2; color: #333; font-size: 18px; }
+  #chat-form button.tool-btn.rec-on, #dm-form button.tool-btn.rec-on { background: #e0245e; color: #fff; animation: recpulse 1s infinite; }
+  @keyframes recpulse { 50% { opacity: .65; } }
+  .voice-box { display: flex; align-items: center; gap: 8px; min-width: 160px; }
+  .voice-box audio { width: 160px; height: 32px; }
   #emoji-pop { display: none; position: fixed; z-index: 500; background: white; border: 1px solid #e4e6eb; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.2); padding: 8px; width: 264px; max-height: 210px; overflow-y: auto; flex-wrap: wrap; }
   #emoji-pop.show { display: flex; }
   #emoji-pop span { width: 33px; height: 33px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; border-radius: 8px; }
@@ -124,6 +136,21 @@
   .section-title { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .03em; margin: 14px 8px 8px; }
   .section-title:first-child { margin-top: 4px; }
   .contact-card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; margin-bottom: 6px; }
+  .av-wrap { position: relative; flex-shrink: 0; }
+  .unread-badge {
+    position: absolute; top: -5px; right: -5px;
+    min-width: 18px; height: 18px; padding: 0 5px;
+    background: #e0245e; color: #fff; border-radius: 999px;
+    font-size: 10px; font-weight: 800; line-height: 18px;
+    text-align: center; border: 2px solid #fff;
+    box-sizing: border-box;
+  }
+  .nav-tab { position: relative; }
+  .nav-unread {
+    margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px;
+    background: #e0245e; color: #fff; border-radius: 999px;
+    font-size: 10px; font-weight: 800; line-height: 18px; text-align: center;
+  }
   .contact-card:hover { background: #f7f7f9; }
   .contact-info { flex: 1; min-width: 0; }
   .contact-info .cname { font-size: 14px; font-weight: 600; color: #222; }
@@ -175,7 +202,7 @@
   /* modals */
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-    align-items: center; justify-content: center; z-index: 100; padding: 20px;
+    align-items: center; justify-content: center; z-index: 5000; padding: 20px;
   }
   .modal-overlay.show { display: flex; }
   .mini-input { width: 100%; padding: 11px 13px; border: 1.5px solid #e2e4e8; border-radius: 10px; font-size: 14px; margin: 6px 0; background: white; }
@@ -292,10 +319,11 @@
             <div class="email" id="my-email">—</div>
           </div>
         </button>
+        <button type="button" id="settings-btn" title="Cài đặt">⚙️</button>
       </div>
 
       <div class="nav-tab active" data-tab="chat">
-        <div class="tab-icon">🌐</div><span class="tab-label">Kênh thế giới</span>
+        <div class="tab-icon">🌐</div><span class="tab-label">Kênh thế giới</span><span class="nav-unread" id="world-unread" style="display:none;">0</span>
       </div>
       <div class="nav-tab" data-tab="friends">
         <div class="tab-icon">👥</div><span class="tab-label">Bạn bè</span>
@@ -371,7 +399,7 @@
 
     <!-- Admin panel -->
     <div class="panel" id="panel-admin">
-      <div class="panel-header"><div class="title">Quản trị · Danh sách tài khoản</div></div>
+      <div class="panel-header"><div class="title">Quản trị · Tài khoản & online</div></div>
       <div id="admin-list"></div>
     </div>
   </div>
@@ -506,6 +534,21 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal-box" style="text-align:left;">
+    <h3 style="text-align:center;">Cài đặt</h3>
+    <label class="toggle-row">
+      <span><div class="t-title">Hiện trạng thái hoạt động</div><div class="t-desc">Người khác thấy bạn đang online</div></span>
+      <input type="checkbox" id="set-activity" checked>
+    </label>
+    <label class="toggle-row">
+      <span><div class="t-title">Hiện đã xem</div><div class="t-desc">Báo đã xem tin và thấy khi người kia xem</div></span>
+      <input type="checkbox" id="set-seen" checked>
+    </label>
+    <button class="modal-btn-close" id="settings-close">Đóng</button>
+  </div>
+</div>
+
 <div id="msg-action">
   <button type="button" id="ma-me">Ẩn với mình</button>
   <button type="button" id="ma-all" class="danger">Thu hồi với mọi người</button>
@@ -523,6 +566,16 @@ const firebaseConfig = {
 };
 
 const ADMIN_EMAIL = "duong158209@gmail.com";
+function iAmAdmin() { return !!(currentUser && currentUser.email === ADMIN_EMAIL); }
+function isUserOnline(d) {
+  if (!d || !d.lastSeen || typeof d.lastSeen.toMillis !== "function") return false;
+  return Date.now() - d.lastSeen.toMillis() < 2 * 60 * 1000;
+}
+function visibleOnline(d) {
+  if (!d) return false;
+  if (iAmAdmin()) return isUserOnline(d);
+  return isUserOnline(d) && !d.hideActivity;
+}
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -640,6 +693,23 @@ document.getElementById("profile-trigger").addEventListener("click", () => {
 });
 document.getElementById("close-profile-btn").addEventListener("click", () => profileModal.classList.remove("show"));
 
+const settingsModal = document.getElementById("settings-modal");
+document.getElementById("settings-btn").addEventListener("click", () => {
+  document.getElementById("set-activity").checked = !(currentUserData && currentUserData.hideActivity);
+  document.getElementById("set-seen").checked = !(currentUserData && currentUserData.hideSeen);
+  settingsModal.classList.add("show");
+});
+document.getElementById("settings-close").addEventListener("click", () => settingsModal.classList.remove("show"));
+settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) settingsModal.classList.remove("show"); });
+document.getElementById("set-activity").addEventListener("change", async (e) => {
+  if (!currentUser) return;
+  await db.collection("users").doc(currentUser.uid).set({ hideActivity: !e.target.checked }, { merge: true });
+});
+document.getElementById("set-seen").addEventListener("change", async (e) => {
+  if (!currentUser) return;
+  await db.collection("users").doc(currentUser.uid).set({ hideSeen: !e.target.checked }, { merge: true });
+});
+
 /* ---------------- ĐỔI TÊN / ĐỔI ẢNH ---------------- */
 document.getElementById("edit-name-btn").addEventListener("click", () => {
   const box = document.getElementById("name-edit");
@@ -727,6 +797,7 @@ document.querySelectorAll(".nav-tab").forEach(tab => {
     tab.classList.add("active");
     document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
     document.getElementById("app-screen").classList.toggle("chat-focus", tab.dataset.tab === "chat");
+    if (tab.dataset.tab === "chat") markWorldRead();
     if (tab.dataset.tab === "contacts") loadContacts();
     if (tab.dataset.tab === "friends") loadFriends();
     if (tab.dataset.tab === "groups") listenGroups();
@@ -764,6 +835,8 @@ function refreshMyUI() {
   setAvatar(document.getElementById("my-avatar"), name, currentUserData && currentUserData.photo);
 }
 let unsubscribeDM = null;
+let unsubscribeChatMeta = null;
+let chatReads = {};
 
 auth.onAuthStateChanged(async (user) => {
   if (user) {
@@ -830,6 +903,7 @@ auth.onAuthStateChanged(async (user) => {
     if (unsubscribeUsers) unsubscribeUsers();
     if (unsubscribeMe) unsubscribeMe();
     if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+    if (unsubscribeChatMeta) { unsubscribeChatMeta(); unsubscribeChatMeta = null; }
     if (unsubscribeGroups) { unsubscribeGroups(); unsubscribeGroups = null; }
     currentChat = null;
     document.getElementById("app-screen").classList.remove("chat-focus");
@@ -851,14 +925,15 @@ function listenOnlineUsers() {
     let changed = false;
     snap.forEach(doc => {
       const d = doc.data();
-      const lastSeen = d.lastSeen ? d.lastSeen.toMillis() : 0;
-      if (now - lastSeen < 2 * 60 * 1000) count++;
+      if (visibleOnline(d)) count++;
       const nm = d.name || "", ph = d.photo || "";
       const prev = usersMap[doc.id];
-      if (!prev || prev.name !== nm || prev.photo !== ph) { usersMap[doc.id] = { name: nm, photo: ph }; changed = true; }
+      usersMap[doc.id] = { name: nm, photo: ph, lastSeen: d.lastSeen, hideActivity: !!d.hideActivity, email: d.email || "" };
+      if (!prev || prev.name !== nm || prev.photo !== ph) changed = true;
     });
     if (changed && lastPublicSnap) renderPublic(lastPublicSnap);
     document.getElementById("user-count").textContent = count + " người đang hoạt động";
+    if (iAmAdmin() && document.getElementById("panel-admin").classList.contains("active")) loadAdminList();
   });
 }
 
@@ -874,6 +949,34 @@ function renderPublic(snap) {
   const last = snap.docs[snap.docs.length - 1];
   const lastIsMine = last && currentUser && last.data().uid === currentUser.uid;
   if (nearBottom || lastIsMine) messagesEl.scrollTop = messagesEl.scrollHeight;
+  updateWorldUnread(snap);
+}
+
+function updateWorldUnread(snap) {
+  const el = document.getElementById("world-unread");
+  if (!el || !currentUser) return;
+  const panelOn = document.getElementById("panel-chat").classList.contains("active");
+  if (panelOn) { el.style.display = "none"; return; }
+  const cut = (currentUserData && currentUserData.worldRead && currentUserData.worldRead.toMillis)
+    ? currentUserData.worldRead.toMillis() : 0;
+  let n = 0;
+  snap.forEach((doc) => {
+    const m = doc.data();
+    if (m.uid === currentUser.uid) return;
+    if (m.recalled || m.type === "recalled") return;
+    const t = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : 0;
+    if (t > cut) n++;
+  });
+  if (n < 1) el.style.display = "none";
+  else { el.style.display = "inline-block"; el.textContent = fmtUnread(n); }
+}
+function markWorldRead() {
+  if (!currentUser) return;
+  db.collection("users").doc(currentUser.uid).set({
+    worldRead: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch(function () {});
+  const el = document.getElementById("world-unread");
+  if (el) el.style.display = "none";
 }
 
 function listenMessages() {
@@ -937,6 +1040,19 @@ function renderMessage(m, pending, container, group, msgId, scope) {
     im.className = "chat-img"; im.src = m.image; im.alt = "Ảnh";
     im.addEventListener("click", (ev) => { ev.stopPropagation(); document.getElementById("lightbox-img").src = m.image; document.getElementById("lightbox").classList.add("show"); });
     bubble.appendChild(im);
+  } else if (m.type === "voice" && (m.fileData || m.fileURL)) {
+    const box = document.createElement("div");
+    box.className = "voice-box";
+    const ic = document.createElement("span"); ic.textContent = "🎤";
+    const au = document.createElement("audio");
+    au.controls = true; au.preload = "metadata";
+    au.src = m.fileData || m.fileURL;
+    au.addEventListener("click", (ev) => ev.stopPropagation());
+    const sec = document.createElement("span");
+    sec.style.fontSize = "11px"; sec.style.opacity = ".8";
+    sec.textContent = m.duration ? (Math.round(m.duration) + "s") : "";
+    box.appendChild(ic); box.appendChild(au); box.appendChild(sec);
+    bubble.appendChild(box);
   } else if (m.type === "file" && (m.fileData || m.fileURL)) {
     const a = document.createElement("a");
     a.className = "chat-file"; a.href = m.fileData || m.fileURL; a.download = m.fileName || "tep";
@@ -1256,10 +1372,20 @@ function buildContactCard(doc, state) {
 
   const info = document.createElement("div");
   info.className = "contact-info";
-  info.innerHTML = `<div class="cname">${escapeHtml(d.name || "Ẩn danh")}</div><div class="cemail">ID: ${escapeHtml(d.friendCode || "")}</div>`;
+  const onTxt = visibleOnline(d) ? '<div class="cemail"><span class="online-dot"></span>Đang hoạt động</div>' : '<div class="cemail">ID: ' + escapeHtml(d.friendCode || "") + "</div>";
+  info.innerHTML = `<div class="cname">${escapeHtml(d.name || "Ẩn danh")}</div>${onTxt}`;
 
-  card.appendChild(avatar);
+  const wrap = document.createElement("div");
+  wrap.className = "av-wrap";
+  wrap.appendChild(avatar);
+  card.appendChild(wrap);
   card.appendChild(info);
+  if (state === "friendlist" && currentUser) {
+    const cid = dmChatId(doc.id);
+    lastReadMsOf(db.collection("chats").doc(cid)).then((ms) => {
+      countUnread(db.collection("chats").doc(cid).collection("messages"), ms).then((n) => putBadge(wrap, n));
+    });
+  }
 
   if (state === "request") {
     const box = document.createElement("div");
@@ -1395,11 +1521,68 @@ async function unblockUser(otherUid, btnEl) {
 function dmChatId(otherUid) {
   return [currentUser.uid, otherUid].sort().join("_");
 }
+function chatParentRef() {
+  if (!currentChat) return null;
+  return (currentChat.type === "group" ? db.collection("groups") : db.collection("chats")).doc(currentChat.id);
+}
+function listenChatReads() {
+  if (unsubscribeChatMeta) { unsubscribeChatMeta(); unsubscribeChatMeta = null; }
+  chatReads = {};
+  const ref = chatParentRef();
+  if (!ref) return;
+  unsubscribeChatMeta = ref.onSnapshot((doc) => {
+    chatReads = (doc.exists && doc.data() && doc.data().reads) || {};
+    if (lastChatSnap) renderChatSnap(lastChatSnap);
+  });
+}
+function markChatRead() {
+  if (!currentUser || !currentChat) return;
+  const ref = chatParentRef();
+  if (!ref) return;
+  if (currentUserData && currentUserData.hideSeen) {
+    /* vẫn đánh dấu đã đọc để xóa badge, không hiện "Đã xem" cho người kia */
+  }
+  const o = {}; o[currentUser.uid] = firebase.firestore.FieldValue.serverTimestamp();
+  ref.set({ reads: o }, { merge: true }).catch(function () {});
+}
+function fmtUnread(n) {
+  if (!n || n < 1) return "";
+  return n > 99 ? "99+" : String(n);
+}
+function putBadge(wrap, n) {
+  let b = wrap.querySelector(".unread-badge");
+  if (n < 1) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement("span"); b.className = "unread-badge"; wrap.appendChild(b); }
+  b.textContent = fmtUnread(n);
+}
+async function countUnread(msgCol, lastReadMs) {
+  try {
+    const snap = await msgCol.orderBy("createdAt", "desc").limit(99).get();
+    let n = 0;
+    snap.forEach((doc) => {
+      const m = doc.data();
+      if (!currentUser || m.uid === currentUser.uid) return;
+      if (m.recalled || m.type === "recalled") return;
+      const t = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : 0;
+      if (t > (lastReadMs || 0)) n++;
+    });
+    return n;
+  } catch (e) { return 0; }
+}
+async function lastReadMsOf(parentRef) {
+  try {
+    const s = await parentRef.get();
+    const r = s.exists && s.data().reads && currentUser ? s.data().reads[currentUser.uid] : null;
+    return r && r.toMillis ? r.toMillis() : 0;
+  } catch (e) { return 0; }
+}
 
 function openDM(friend) {
   currentFriend = friend;
   currentChat = { type: "dm", id: dmChatId(friend.uid) };
   sharedNicks = {}; lastChatSnap = null;
+  listenChatReads();
+  markChatRead();
   document.getElementById("dm-theme-btn").style.display = "";
   document.getElementById("dm-group-btn").style.display = "none";
   if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
@@ -1462,7 +1645,8 @@ function applyDMBg(url) {
 
 /* ---- đổi giao diện đoạn chat ---- */
 const themeModal = document.getElementById("theme-modal");
-document.getElementById("dm-theme-btn").addEventListener("click", () => {
+document.getElementById("dm-theme-btn").addEventListener("click", (e) => {
+  e.preventDefault(); e.stopPropagation();
   if (!currentChat) return;
   document.getElementById("theme-friend").textContent = currentChat.type === "group" ? (currentChat.name || "nhóm") : (currentFriend ? currentFriend.name : "");
   themeModal.classList.add("show");
@@ -1498,6 +1682,7 @@ document.getElementById("theme-input").addEventListener("change", async (e) => {
     const dataUrl = await imageToDataURLMax(file, 900);
     if (dataUrl.length > 700000) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
     await chatDocRef().set({ bg: dataUrl }, { merge: true });
+    applyDMBg(dataUrl);
     themeModal.classList.remove("show");
   } catch (err) {
     alert("Không đổi được ảnh nền lúc này, kiểm tra lại rules hoặc thử ảnh khác.");
@@ -1505,9 +1690,10 @@ document.getElementById("theme-input").addEventListener("change", async (e) => {
 });
 
 document.getElementById("theme-reset").addEventListener("click", async () => {
-  if (!currentFriend) return;
+  if (!currentChat) return;
   try {
     await chatDocRef().set({ bg: firebase.firestore.FieldValue.delete() }, { merge: true });
+    applyDMBg("");
     themeModal.classList.remove("show");
   } catch (err) {
     alert("Không đặt lại được lúc này.");
@@ -1622,10 +1808,15 @@ async function loadAdminList() {
     const row = document.createElement("div");
     row.className = "admin-row";
     const created = d.createdAt ? d.createdAt.toDate().toLocaleString("vi-VN") : "Không rõ";
-    const isAdmin = d.email === ADMIN_EMAIL;
+    const isAd = d.email === ADMIN_EMAIL;
+    const on = isUserOnline(d);
+    const st = on
+      ? ('<span class="a-on">● Đang online</span>' + (d.hideActivity ? ' · đã tắt hiện trạng thái' : ''))
+      : '<span class="a-off">○ Offline</span>';
     row.innerHTML = `
-      <div class="a-name">${escapeHtml(d.name || "Ẩn danh")}${isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}</div>
+      <div class="a-name">${escapeHtml(d.name || "Ẩn danh")}${isAd ? '<span class="admin-badge">ADMIN</span>' : ''}</div>
       <div class="a-email">${escapeHtml(d.email || "")}</div>
+      <div class="a-meta">${st}</div>
       <div class="a-meta">Tạo lúc: ${created} · UID: ${doc.id}</div>
     `;
     listEl.appendChild(row);
@@ -1657,6 +1848,22 @@ function renderChatSnap(snap) {
   if (snap.empty) dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
   snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, true, doc.id, "dm"));
   const last = snap.docs[snap.docs.length - 1];
+  if (last && currentUser && last.data().uid === currentUser.uid && !(currentUserData && currentUserData.hideSeen)) {
+    const t = last.data().createdAt && last.data().createdAt.toMillis ? last.data().createdAt.toMillis() : 0;
+    let seen = false;
+    Object.keys(chatReads || {}).forEach((uid) => {
+      if (uid === currentUser.uid) return;
+      const r = chatReads[uid];
+      const ms = r && r.toMillis ? r.toMillis() : 0;
+      if (ms >= t) seen = true;
+    });
+    if (seen) {
+      const s = document.createElement("div");
+      s.className = "seen-line";
+      s.textContent = "Đã xem";
+      dmEl.appendChild(s);
+    }
+  }
   if (nearBottom || (last && last.data().uid === currentUser.uid)) dmEl.scrollTop = dmEl.scrollHeight;
 }
 
@@ -1670,7 +1877,8 @@ function fillNickInput() {
   const uid = document.getElementById("nick-target").value;
   document.getElementById("nick-input").value = nickFor(uid);
 }
-document.getElementById("dm-nick-btn").addEventListener("click", () => {
+document.getElementById("dm-nick-btn").addEventListener("click", (e) => {
+  e.preventDefault(); e.stopPropagation();
   const sel = document.getElementById("nick-target");
   sel.innerHTML = "";
   nickTargets().forEach(t => { const o = document.createElement("option"); o.value = t.uid; o.textContent = t.name; sel.appendChild(o); });
@@ -1727,7 +1935,11 @@ function listenGroups() {
       const av = document.createElement("div"); av.className = "avatar"; setAvatar(av, g.name || "?", g.photo || "");
       const info = document.createElement("div"); info.className = "cinfo"; info.style.flex = "1";
       info.innerHTML = '<div class="cname">' + escapeHtml(g.name || "Nhóm") + '</div><div class="cemail">' + (g.members || []).length + ' thành viên</div>';
-      card.appendChild(av); card.appendChild(info);
+      const wrap = document.createElement("div"); wrap.className = "av-wrap"; wrap.appendChild(av);
+      card.appendChild(wrap); card.appendChild(info);
+      lastReadMsOf(db.collection("groups").doc(d.id)).then((ms) => {
+        countUnread(db.collection("groups").doc(d.id).collection("messages"), ms).then((n) => putBadge(wrap, n));
+      });
       card.addEventListener("click", () => openGroup(d.id, g));
       listEl.appendChild(card);
     });
@@ -1739,6 +1951,8 @@ function openGroup(id, g) {
   currentFriend = null;
   currentChat = { type: "group", id: id, members: g.members || [], name: g.name, photo: g.photo || "" };
   sharedNicks = g.nicks || {}; lastChatSnap = null;
+  listenChatReads();
+  markChatRead();
   setAvatar(document.getElementById("dm-avatar"), g.name, g.photo || "");
   document.getElementById("dm-name").textContent = g.name || "Nhóm";
   document.getElementById("dm-theme-btn").style.display = "";
@@ -1847,11 +2061,76 @@ function readAsDataURL(file) {
   return new Promise((res, rej) => { const r = new FileReader(); r.onerror = rej; r.onload = () => res(r.result); r.readAsDataURL(file); });
 }
 
+function pickMime() {
+  const list = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac", "audio/ogg"];
+  if (!window.MediaRecorder) return "";
+  for (let i = 0; i < list.length; i++) if (MediaRecorder.isTypeSupported(list[i])) return list[i];
+  return "";
+}
+function bindVoiceBtn(btn, where) {
+  let rec = null, chunks = [], t0 = 0, timer = null, stream = null;
+  const stopAll = () => {
+    if (timer) { clearInterval(timer); timer = null; }
+    btn.classList.remove("rec-on");
+    btn.textContent = "🎤";
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+  };
+  btn.addEventListener("click", async () => {
+    if (rec && rec.state === "recording") {
+      rec.stop();
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return alert("Trình duyệt không hỗ trợ ghi âm.");
+    }
+    const mime = pickMime();
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      return alert("Không mở được micro. Cho phép quyền micro rồi thử lại.");
+    }
+    chunks = [];
+    t0 = Date.now();
+    try {
+      rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch (e) {
+      stopAll();
+      return alert("Không ghi được âm thanh trên thiết bị này.");
+    }
+    rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunks.push(ev.data); };
+    rec.onstop = async () => {
+      const dur = (Date.now() - t0) / 1000;
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      rec = null;
+      stopAll();
+      if (dur < 0.4 || blob.size < 200) return;
+      if (blob.size > MAX_FILE_BYTES) return alert("Tin thoại quá dài. Giữ dưới khoảng 30 giây.");
+      try {
+        const d = await readAsDataURL(blob);
+        if (d.length > MAX_DATA_LEN) return alert("Tin thoại quá nặng, ghi ngắn hơn nhé.");
+        await sendExtra(where, { type: "voice", fileData: d, duration: dur, fileName: "voice", fileSize: blob.size });
+      } catch (err) {
+        alert("Không gửi được tin thoại.");
+      }
+    };
+    rec.start();
+    btn.classList.add("rec-on");
+    const tick = () => {
+      const s = Math.round((Date.now() - t0) / 1000);
+      btn.textContent = s + "s";
+      if (s >= 30 && rec && rec.state === "recording") rec.stop();
+    };
+    tick();
+    timer = setInterval(tick, 400);
+  });
+}
+
 function setupComposer(formId, inputId, where) {
   const form = document.getElementById(formId), input = document.getElementById(inputId);
   const sendBtn = form.querySelector('button[type="submit"]');
   const mk = (label, title, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "tool-btn " + (cls || ""); b.textContent = label; b.title = title; form.insertBefore(b, input); return b; };
-  const emojiBtn = mk("😊", "Icon", "emoji-btn"), imgBtn = mk("🖼️", "Gửi hình ảnh"), fileBtn = mk("📎", "Gửi tệp");
+  const emojiBtn = mk("😊", "Icon", "emoji-btn"), imgBtn = mk("🖼️", "Gửi hình ảnh"), fileBtn = mk("📎", "Gửi tệp"), micBtn = mk("🎤", "Gửi tin thoại");
   const imgIn = document.createElement("input"); imgIn.type = "file"; imgIn.accept = "image/*"; imgIn.style.display = "none";
   const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.style.display = "none";
   form.appendChild(imgIn); form.appendChild(fileIn);
@@ -1866,6 +2145,7 @@ function setupComposer(formId, inputId, where) {
   });
   imgBtn.addEventListener("click", () => imgIn.click());
   fileBtn.addEventListener("click", () => fileIn.click());
+  bindVoiceBtn(micBtn, where);
 
   imgIn.addEventListener("change", async () => {
     const f = imgIn.files[0]; imgIn.value = "";
@@ -1896,7 +2176,8 @@ function chatDocRef() {
   return (currentChat.type === "group" ? db.collection("groups") : db.collection("chats")).doc(currentChat.id);
 }
 const gsetModal = document.getElementById("gset-modal");
-document.getElementById("dm-group-btn").addEventListener("click", () => {
+document.getElementById("dm-group-btn").addEventListener("click", (e) => {
+  e.preventDefault(); e.stopPropagation();
   if (!currentChat || currentChat.type !== "group") return;
   document.getElementById("gset-name").value = currentChat.name || "";
   setAvatar(document.getElementById("gset-avatar"), currentChat.name, currentChat.photo);
@@ -1906,7 +2187,12 @@ document.getElementById("gset-close").addEventListener("click", () => gsetModal.
 document.getElementById("gset-save").addEventListener("click", async () => {
   const name = document.getElementById("gset-name").value.trim();
   if (!name) return alert("Tên nhóm không được để trống.");
-  try { await chatDocRef().update({ name: name }); gsetModal.classList.remove("show"); }
+  try {
+    await chatDocRef().update({ name: name });
+    currentChat.name = name;
+    document.getElementById("dm-name").textContent = name;
+    gsetModal.classList.remove("show");
+  }
   catch (e) { alert("Không đổi được tên nhóm, kiểm tra lại rules nhé."); }
 });
 document.getElementById("gset-photo").addEventListener("click", () => document.getElementById("gset-input").click());
@@ -1916,7 +2202,9 @@ document.getElementById("gset-input").addEventListener("change", async (e) => {
   try {
     const d = await imageToDataURLMax(f, 256);
     await chatDocRef().update({ photo: d });
+    currentChat.photo = d;
     setAvatar(document.getElementById("gset-avatar"), currentChat.name, d);
+    setAvatar(document.getElementById("dm-avatar"), currentChat.name, d);
   } catch (err) { alert("Không đổi được ảnh nhóm lúc này."); }
 });
 document.getElementById("gset-photo-del").addEventListener("click", async () => {
