@@ -69,7 +69,7 @@
   .panel-header .status { font-size: 12px; color: #31a24c; }
 
   /* chat */
-  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 4px; }
+  #messages, #dm-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 4px; }
   .msg-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 6px; }
   .msg-row.me { justify-content: flex-end; }
   .msg-row .mini-avatar {
@@ -83,9 +83,9 @@
   .msg-row.me + .msg-meta { text-align: right; margin: 0 0 8px 0; }
   .sender-label { font-size: 11px; color: #888; margin: 6px 0 2px 34px; }
 
-  #chat-form { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid #eee; }
-  #chat-form input { flex: 1; padding: 12px 16px; border: 1px solid #ddd; border-radius: 22px; font-size: 14px; outline: none; }
-  #chat-form button {
+  #chat-form, #dm-form { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid #eee; }
+  #chat-form input, #dm-form input { flex: 1; padding: 12px 16px; border: 1px solid #ddd; border-radius: 22px; font-size: 14px; outline: none; }
+  #chat-form button, #dm-form button {
     background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 50%;
     width: 42px; height: 42px; font-size: 16px; cursor: pointer; flex-shrink: 0;
   }
@@ -118,6 +118,10 @@
   .search-row input { flex: 1; min-width: 0; padding: 12px 14px; border: 1.5px solid #e2e4e8; border-radius: 12px; font-size: 15px; letter-spacing: 2px; text-transform: uppercase; font-family: ui-monospace, Menlo, monospace; }
   .search-row input:focus { outline: none; border-color: #764ba2; }
   .search-row button { padding: 0 16px; border: none; border-radius: 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .modal-btn-primary { margin-top: 18px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: 700; font-size: 14px; cursor: pointer; }
+  .modal-btn-close { margin-top: 8px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: #f0f0f2; color: #333; font-weight: 600; cursor: pointer; }
+  .chev { color: #bbb; font-size: 22px; padding: 0 6px; }
+  .back-btn { border: none; background: none; font-size: 22px; cursor: pointer; color: #764ba2; padding: 0 4px; }
   .empty-note { text-align: center; color: #999; font-size: 13px; margin: 20px 8px; padding: 0 12px; line-height: 1.5; }
 
   /* admin */
@@ -240,6 +244,20 @@
       </form>
     </div>
 
+    <!-- DM panel -->
+    <div class="panel" id="panel-dm">
+      <div class="panel-header">
+        <button class="back-btn" id="dm-back" title="Quay lại">←</button>
+        <div class="avatar" id="dm-avatar">?</div>
+        <div><div class="title" id="dm-name">—</div></div>
+      </div>
+      <div id="dm-messages"></div>
+      <form id="dm-form">
+        <input type="text" id="dm-input" placeholder="Aa" autocomplete="off">
+        <button type="submit">➤</button>
+      </form>
+    </div>
+
     <!-- Friends panel -->
     <div class="panel" id="panel-friends">
       <div class="panel-header"><div class="title">Bạn bè</div></div>
@@ -273,6 +291,31 @@
       <button class="modal-cancel" id="cancel-logout">Hủy</button>
       <button class="modal-confirm-danger" id="confirm-logout">Đăng xuất</button>
     </div>
+  </div>
+</div>
+
+<!-- ============ FRIEND PROFILE MODAL ============ -->
+<div class="modal-overlay" id="friend-modal">
+  <div class="modal-box">
+    <div class="profile-avatar-lg" id="fp-avatar">?</div>
+    <div class="profile-field">
+      <div class="pf-label">Tên hiển thị</div>
+      <div class="pf-value" id="fp-name">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">ID kết bạn</div>
+      <div class="pf-value" id="fp-code">—</div>
+    </div>
+    <div class="profile-field" id="fp-email-wrap" style="display:none;">
+      <div class="pf-label">Email (chỉ quản trị thấy)</div>
+      <div class="pf-value" id="fp-email">—</div>
+    </div>
+    <div class="profile-field">
+      <div class="pf-label">Tham gia từ</div>
+      <div class="pf-value" id="fp-created">—</div>
+    </div>
+    <button class="modal-btn-primary" id="fp-chat">💬 Trò chuyện</button>
+    <button class="modal-btn-close" id="fp-close">Đóng</button>
   </div>
 </div>
 
@@ -430,6 +473,7 @@ document.getElementById("close-profile-btn").addEventListener("click", () => pro
 /* ---------------- TAB SWITCHING ---------------- */
 document.querySelectorAll(".nav-tab").forEach(tab => {
   tab.addEventListener("click", () => {
+    if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
     document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
     document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
     tab.classList.add("active");
@@ -446,6 +490,7 @@ let currentUserData = null;
 let unsubscribeMessages = null;
 let unsubscribeUsers = null;
 let unsubscribeMe = null;
+let unsubscribeDM = null;
 
 auth.onAuthStateChanged(async (user) => {
   if (user) {
@@ -508,6 +553,7 @@ auth.onAuthStateChanged(async (user) => {
     if (unsubscribeMessages) unsubscribeMessages();
     if (unsubscribeUsers) unsubscribeUsers();
     if (unsubscribeMe) unsubscribeMe();
+    if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
     document.getElementById("app-screen").style.display = "none";
     document.getElementById("auth-screen").style.display = "flex";
     document.getElementById("admin-tab").style.display = "none";
@@ -551,12 +597,13 @@ function listenMessages() {
     });
 }
 
-function renderMessage(m, pending) {
-  const messagesEl = document.getElementById("messages");
+function renderMessage(m, pending, container, group) {
+  const messagesEl = container || document.getElementById("messages");
+  const showName = group !== false;
   const isMe = currentUser && m.uid === currentUser.uid;
   const time = m.createdAt ? m.createdAt.toDate().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
 
-  if (!isMe) {
+  if (!isMe && showName) {
     const label = document.createElement("div");
     label.className = "sender-label";
     label.textContent = m.name || m.email || "Ẩn danh";
@@ -566,7 +613,7 @@ function renderMessage(m, pending) {
   const row = document.createElement("div");
   row.className = "msg-row " + (isMe ? "me" : "other");
 
-  if (!isMe) {
+  if (!isMe && showName) {
     const mini = document.createElement("div");
     mini.className = "mini-avatar";
     mini.textContent = (m.name || m.email || "?").charAt(0).toUpperCase();
@@ -584,7 +631,7 @@ function renderMessage(m, pending) {
   meta.className = "msg-meta";
   meta.textContent = pending ? "Đang gửi…" : time;
   meta.style.textAlign = isMe ? "right" : "left";
-  meta.style.marginLeft = isMe ? "0" : "40px";
+  meta.style.marginLeft = isMe ? "0" : (showName ? "40px" : "6px");
   messagesEl.appendChild(meta);
 }
 
@@ -662,18 +709,22 @@ async function loadContacts() {
 async function loadFriends() {
   const listEl = document.getElementById("friends-list");
   listEl.innerHTML = '<div class="empty-note">Đang tải...</div>';
-  const meSnap = await db.collection("users").doc(currentUser.uid).get();
-  contactsMe = meSnap.data() || {};
-  updateReqBadge(contactsMe);
-  const uids = contactsMe.friends || [];
-  const docs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
+  try {
+    const meSnap = await db.collection("users").doc(currentUser.uid).get();
+    contactsMe = meSnap.data() || {};
+    updateReqBadge(contactsMe);
+    const uids = contactsMe.friends || [];
+    const docs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
 
-  listEl.innerHTML = "";
-  if (docs.length === 0) {
-    listEl.innerHTML = '<div class="empty-note">Bạn chưa có bạn bè nào. Vào mục Kết bạn, nhập ID để tìm nhé!</div>';
-    return;
+    listEl.innerHTML = "";
+    if (docs.length === 0) {
+      listEl.innerHTML = '<div class="empty-note">Bạn chưa có bạn bè nào. Vào mục Kết bạn, nhập ID để tìm nhé!</div>';
+      return;
+    }
+    docs.forEach(d => listEl.appendChild(buildContactCard(d, "friendlist")));
+  } catch (e) {
+    listEl.innerHTML = '<div class="empty-note">Không tải được danh sách bạn bè, thử lại sau.</div>';
   }
-  docs.forEach(d => listEl.appendChild(buildContactCard(d, "friend")));
 }
 
 function renderFind(listEl) {
@@ -768,6 +819,15 @@ function buildContactCard(doc, state) {
     return card;
   }
 
+  if (state === "friendlist") {
+    const chev = document.createElement("span");
+    chev.className = "chev"; chev.textContent = "›";
+    card.appendChild(chev);
+    card.style.cursor = "pointer";
+    card.addEventListener("click", () => openFriendProfile(doc));
+    return card;
+  }
+
   const btn = document.createElement("button");
   if (state === "friend") {
     btn.className = "friend-btn added"; btn.textContent = "Đã là bạn bè"; btn.disabled = true;
@@ -781,6 +841,88 @@ function buildContactCard(doc, state) {
   card.appendChild(btn);
   return card;
 }
+
+/* ---------------- FRIEND PROFILE + DM ---------------- */
+const friendModal = document.getElementById("friend-modal");
+let currentFriend = null; // { uid, name }
+
+function openFriendProfile(doc) {
+  const d = doc.data();
+  const name = d.name || "Ẩn danh";
+  currentFriend = { uid: doc.id, name: name };
+  document.getElementById("fp-avatar").textContent = name.charAt(0).toUpperCase();
+  document.getElementById("fp-name").textContent = name;
+  document.getElementById("fp-code").textContent = d.friendCode || "—";
+  document.getElementById("fp-created").textContent = d.createdAt ? d.createdAt.toDate().toLocaleString("vi-VN") : "Không rõ";
+
+  // email chỉ hiện cho quản trị
+  const isAdmin = currentUser && currentUser.email === ADMIN_EMAIL;
+  document.getElementById("fp-email-wrap").style.display = isAdmin ? "block" : "none";
+  document.getElementById("fp-email").textContent = d.email || "—";
+
+  friendModal.classList.add("show");
+}
+document.getElementById("fp-close").addEventListener("click", () => friendModal.classList.remove("show"));
+document.getElementById("fp-chat").addEventListener("click", () => {
+  friendModal.classList.remove("show");
+  if (currentFriend) openDM(currentFriend);
+});
+
+function dmChatId(otherUid) {
+  return [currentUser.uid, otherUid].sort().join("_");
+}
+
+function openDM(friend) {
+  if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
+  document.getElementById("dm-avatar").textContent = friend.name.charAt(0).toUpperCase();
+  document.getElementById("dm-name").textContent = friend.name;
+
+  // giữ tab "Bạn bè" sáng, chuyển sang panel chat riêng
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "friends"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("panel-dm").classList.add("active");
+
+  const dmEl = document.getElementById("dm-messages");
+  dmEl.innerHTML = "";
+  unsubscribeDM = db.collection("chats").doc(dmChatId(friend.uid)).collection("messages")
+    .orderBy("createdAt", "asc")
+    .limitToLast(200)
+    .onSnapshot((snap) => {
+      const nearBottom = dmEl.scrollHeight - dmEl.scrollTop - dmEl.clientHeight < 120;
+      dmEl.innerHTML = "";
+      if (snap.empty) {
+        dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
+      }
+      snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, false));
+      const last = snap.docs[snap.docs.length - 1];
+      const lastIsMine = last && last.data().uid === currentUser.uid;
+      if (nearBottom || lastIsMine) dmEl.scrollTop = dmEl.scrollHeight;
+    }, () => {
+      dmEl.innerHTML = '<div class="empty-note">Không tải được tin nhắn, kiểm tra lại quyền (rules) nhé.</div>';
+    });
+}
+
+document.getElementById("dm-back").addEventListener("click", () => {
+  document.querySelector('.nav-tab[data-tab="friends"]').click();
+});
+
+document.getElementById("dm-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("dm-input");
+  const text = input.value.trim();
+  if (!text || !currentUser || !currentFriend) return;
+  input.value = "";
+  input.focus();
+  db.collection("chats").doc(dmChatId(currentFriend.uid)).collection("messages").add({
+    text: text,
+    uid: currentUser.uid,
+    name: currentUser.displayName || currentUser.email.split("@")[0],
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {
+    input.value = text;
+    alert("Gửi tin nhắn thất bại, thử lại nhé.");
+  });
+});
 
 const FV = () => firebase.firestore.FieldValue;
 
