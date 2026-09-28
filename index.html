@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Raumania</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
@@ -90,6 +91,17 @@
     background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 50%;
     width: 42px; height: 42px; font-size: 16px; cursor: pointer; flex-shrink: 0;
   }
+
+  #chat-form button.tool-btn, #dm-form button.tool-btn { background: #f0f0f2; color: #333; font-size: 18px; }
+  #emoji-pop { display: none; position: fixed; z-index: 500; background: white; border: 1px solid #e4e6eb; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.2); padding: 8px; width: 264px; max-height: 210px; overflow-y: auto; flex-wrap: wrap; }
+  #emoji-pop.show { display: flex; }
+  #emoji-pop span { width: 33px; height: 33px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; border-radius: 8px; }
+  #emoji-pop span:hover { background: #f0f0f2; }
+  .bubble img.chat-img { display: block; max-width: 100%; max-height: 260px; border-radius: 14px; cursor: zoom-in; }
+  .bubble a.chat-file { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+  .bubble a.chat-file .fn { font-weight: 600; word-break: break-all; }
+  .bubble a.chat-file .fs { font-size: 11px; opacity: .75; }
+  #lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
 
   /* contacts / friends */
   #contacts-list { flex: 1; overflow-y: auto; padding: 12px; }
@@ -268,7 +280,8 @@
         <button class="back-btn" id="dm-back" title="Quay lại">←</button>
         <div class="avatar" id="dm-avatar">?</div>
         <div><div class="title" id="dm-name">—</div></div>
-        <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh" style="margin-left:auto;">✏️</button>
+        <button class="back-btn" id="dm-group-btn" title="Cài đặt nhóm" style="display:none; margin-left:auto;">⚙️</button>
+        <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh">✏️</button>
         <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat">🎨</button>
       </div>
       <div id="dm-messages"></div>
@@ -331,6 +344,22 @@
     <input type="file" id="theme-input" accept="image/*" style="display:none;">
   </div>
 </div>
+
+<div id="emoji-pop"></div>
+<div id="upload-toast" style="display:none; position:fixed; left:50%; bottom:44px; transform:translateX(-50%); background:#222; color:white; padding:10px 16px; border-radius:20px; font-size:13px; z-index:700;"></div>
+<div class="modal-overlay" id="gset-modal">
+  <div class="modal-box">
+    <h3>Cài đặt nhóm</h3>
+    <div class="profile-avatar-lg" id="gset-avatar" style="margin:0 auto 10px;">?</div>
+    <button class="modal-btn-soft" id="gset-photo" style="width:100%;">🖼️ Đổi ảnh nhóm</button>
+    <button class="modal-btn-soft" id="gset-photo-del" style="width:100%; margin-top:8px;">Xóa ảnh nhóm</button>
+    <input type="text" id="gset-name" class="mini-input" placeholder="Tên nhóm" maxlength="40" style="margin-top:12px;">
+    <button class="modal-btn-primary" id="gset-save" style="margin-top:0;">Lưu tên nhóm</button>
+    <button class="modal-btn-close" id="gset-close">Đóng</button>
+    <input type="file" id="gset-input" accept="image/*" style="display:none;">
+  </div>
+</div>
+<div class="modal-overlay" id="lightbox" style="z-index:600; background:rgba(0,0,0,.85);"><img id="lightbox-img" alt=""></div>
 
 <!-- ============ GROUP CREATE MODAL ============ -->
 <div class="modal-overlay" id="group-modal">
@@ -829,7 +858,25 @@ function renderMessage(m, pending, container, group) {
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = m.text;
+  if (m.type === "image" && m.image) {
+    bubble.style.padding = "4px";
+    const im = document.createElement("img");
+    im.className = "chat-img"; im.src = m.image; im.alt = "Ảnh";
+    im.addEventListener("click", () => { document.getElementById("lightbox-img").src = m.image; document.getElementById("lightbox").classList.add("show"); });
+    bubble.appendChild(im);
+  } else if (m.type === "file" && (m.fileData || m.fileURL)) {
+    const a = document.createElement("a");
+    a.className = "chat-file"; a.href = m.fileData || m.fileURL; a.download = m.fileName || "tep";
+    if (m.fileURL) { a.target = "_blank"; a.rel = "noopener"; }
+    const ic = document.createElement("span"); ic.textContent = "📄"; ic.style.fontSize = "26px";
+    const box = document.createElement("span");
+    const fn = document.createElement("div"); fn.className = "fn"; fn.textContent = m.fileName || "Tệp";
+    const fs = document.createElement("div"); fs.className = "fs"; fs.textContent = fmtSize(m.fileSize || 0) + " · bấm để tải";
+    box.appendChild(fn); box.appendChild(fs); a.appendChild(ic); a.appendChild(box);
+    bubble.appendChild(a);
+  } else {
+    bubble.textContent = m.text;
+  }
   if (pending) bubble.style.opacity = "0.6";
   row.appendChild(bubble);
   messagesEl.appendChild(row);
@@ -1167,6 +1214,7 @@ function openDM(friend) {
   currentChat = { type: "dm", id: dmChatId(friend.uid) };
   sharedNicks = {}; lastChatSnap = null;
   document.getElementById("dm-theme-btn").style.display = "";
+  document.getElementById("dm-group-btn").style.display = "none";
   if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
   setAvatar(document.getElementById("dm-avatar"), friend.name, friend.doc && friend.doc.data().photo);
   document.getElementById("dm-name").textContent = nickFor(friend.uid) || friend.name;
@@ -1217,8 +1265,8 @@ function applyDMBg(url) {
 /* ---- đổi giao diện đoạn chat ---- */
 const themeModal = document.getElementById("theme-modal");
 document.getElementById("dm-theme-btn").addEventListener("click", () => {
-  if (!currentFriend) return;
-  document.getElementById("theme-friend").textContent = currentFriend.name;
+  if (!currentChat) return;
+  document.getElementById("theme-friend").textContent = currentChat.type === "group" ? (currentChat.name || "nhóm") : (currentFriend ? currentFriend.name : "");
   themeModal.classList.add("show");
 });
 document.getElementById("theme-close").addEventListener("click", () => themeModal.classList.remove("show"));
@@ -1247,11 +1295,11 @@ function imageToDataURLMax(file, maxSide) {
 document.getElementById("theme-input").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
-  if (!file || !currentFriend) return;
+  if (!file || !currentChat) return;
   try {
     const dataUrl = await imageToDataURLMax(file, 900);
     if (dataUrl.length > 700000) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
-    await db.collection("chats").doc(dmChatId(currentFriend.uid)).set({ bg: dataUrl }, { merge: true });
+    await chatDocRef().set({ bg: dataUrl }, { merge: true });
     themeModal.classList.remove("show");
   } catch (err) {
     alert("Không đổi được ảnh nền lúc này, kiểm tra lại rules hoặc thử ảnh khác.");
@@ -1261,7 +1309,7 @@ document.getElementById("theme-input").addEventListener("change", async (e) => {
 document.getElementById("theme-reset").addEventListener("click", async () => {
   if (!currentFriend) return;
   try {
-    await db.collection("chats").doc(dmChatId(currentFriend.uid)).set({ bg: firebase.firestore.FieldValue.delete() }, { merge: true });
+    await chatDocRef().set({ bg: firebase.firestore.FieldValue.delete() }, { merge: true });
     themeModal.classList.remove("show");
   } catch (err) {
     alert("Không đặt lại được lúc này.");
@@ -1472,7 +1520,7 @@ function listenGroups() {
       const card = document.createElement("div");
       card.className = "contact-card";
       card.style.cursor = "pointer";
-      const av = document.createElement("div"); av.className = "avatar"; av.textContent = (g.name || "?").charAt(0).toUpperCase();
+      const av = document.createElement("div"); av.className = "avatar"; setAvatar(av, g.name || "?", g.photo || "");
       const info = document.createElement("div"); info.className = "cinfo"; info.style.flex = "1";
       info.innerHTML = '<div class="cname">' + escapeHtml(g.name || "Nhóm") + '</div><div class="cemail">' + (g.members || []).length + ' thành viên</div>';
       card.appendChild(av); card.appendChild(info);
@@ -1485,12 +1533,14 @@ function listenGroups() {
 function openGroup(id, g) {
   if (unsubscribeDM) { unsubscribeDM(); unsubscribeDM = null; }
   currentFriend = null;
-  currentChat = { type: "group", id: id, members: g.members || [] };
+  currentChat = { type: "group", id: id, members: g.members || [], name: g.name, photo: g.photo || "" };
   sharedNicks = g.nicks || {}; lastChatSnap = null;
-  setAvatar(document.getElementById("dm-avatar"), g.name, "");
+  setAvatar(document.getElementById("dm-avatar"), g.name, g.photo || "");
   document.getElementById("dm-name").textContent = g.name || "Nhóm";
-  document.getElementById("dm-theme-btn").style.display = "none";
-  applyDMBg("");
+  document.getElementById("dm-theme-btn").style.display = "";
+  document.getElementById("dm-group-btn").style.display = "";
+  document.getElementById("dm-nick-btn").style.marginLeft = "0";
+  applyDMBg(g.bg || "");
   document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "groups"));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.getElementById("panel-dm").classList.add("active");
@@ -1501,7 +1551,10 @@ function openGroup(id, g) {
     const d = doc.data(); if (!d) return;
     sharedNicks = d.nicks || {};
     currentChat.members = d.members || [];
+    currentChat.name = d.name; currentChat.photo = d.photo || "";
     document.getElementById("dm-name").textContent = d.name || "Nhóm";
+    setAvatar(document.getElementById("dm-avatar"), d.name, d.photo || "");
+    applyDMBg(d.bg || "");
     refreshChatTitle();
   }, () => {});
   const u2 = ref.collection("messages").orderBy("createdAt", "asc").limitToLast(200).onSnapshot((snap) => {
@@ -1550,6 +1603,146 @@ document.getElementById("group-create").addEventListener("click", async () => {
     openGroup(ref.id, snap.data() || { name: name, members: [currentUser.uid].concat(picked) });
   } catch (e) { err.textContent = "Tạo nhóm thất bại, kiểm tra lại rules nhé."; }
 });
+
+/* ---------------- ICON / ẢNH / TỆP ---------------- */
+const EMOJI_LIST = "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😋 😜 🤪 😎 🤩 🥳 😏 😒 😞 😔 😢 😭 😤 😡 🤯 😱 😨 😰 🤗 🤔 🤫 😴 🙄 😬 👍 👎 👏 🙌 🙏 💪 👋 ✌️ 🤝 ❤️ 🧡 💛 💚 💙 💜 🖤 💔 🔥 ✨ 🎉 🎂 🎁 🌹 ☀️ 🌙 ⭐ 🍀 🍕 🍔 🍟 🍺 ☕ ⚽ 🎮 🎵 💯".split(" ");
+const MAX_FILE_BYTES = 650 * 1024;   // Firestore giới hạn ~1MB / tin nhắn
+const MAX_DATA_LEN = 900000;
+function fmtSize(b) { return b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(0) + " KB" : (b / 1048576).toFixed(1) + " MB"; }
+document.getElementById("lightbox").addEventListener("click", () => document.getElementById("lightbox").classList.remove("show"));
+
+const emojiPop = document.getElementById("emoji-pop");
+let emojiTarget = null;
+EMOJI_LIST.forEach(e => {
+  const sp = document.createElement("span"); sp.textContent = e;
+  sp.addEventListener("click", () => {
+    if (!emojiTarget) return;
+    const i = emojiTarget, st = i.selectionStart == null ? i.value.length : i.selectionStart, en = i.selectionEnd == null ? st : i.selectionEnd;
+    i.value = i.value.slice(0, st) + e + i.value.slice(en);
+    i.focus(); i.setSelectionRange(st + e.length, st + e.length);
+  });
+  emojiPop.appendChild(sp);
+});
+document.addEventListener("click", (ev) => {
+  if (!emojiPop.contains(ev.target) && !ev.target.classList.contains("emoji-btn")) emojiPop.classList.remove("show");
+});
+
+function sendExtra(where, extra) {
+  if (!currentUser) return Promise.reject();
+  const base = { uid: currentUser.uid, name: currentUser.displayName || currentUser.email.split("@")[0], createdAt: firebase.firestore.FieldValue.serverTimestamp(), text: "" };
+  let col;
+  if (where === "public") { base.email = currentUser.email; col = db.collection("messages"); }
+  else {
+    if (!currentChat) return Promise.reject();
+    col = (currentChat.type === "group" ? db.collection("groups") : db.collection("chats")).doc(currentChat.id).collection("messages");
+  }
+  return col.add(Object.assign(base, extra));
+}
+function readAsDataURL(file) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onerror = rej; r.onload = () => res(r.result); r.readAsDataURL(file); });
+}
+
+function setupComposer(formId, inputId, where) {
+  const form = document.getElementById(formId), input = document.getElementById(inputId);
+  const sendBtn = form.querySelector('button[type="submit"]');
+  const mk = (label, title, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "tool-btn " + (cls || ""); b.textContent = label; b.title = title; form.insertBefore(b, input); return b; };
+  const emojiBtn = mk("😊", "Icon", "emoji-btn"), imgBtn = mk("🖼️", "Gửi hình ảnh"), fileBtn = mk("📎", "Gửi tệp");
+  const imgIn = document.createElement("input"); imgIn.type = "file"; imgIn.accept = "image/*"; imgIn.style.display = "none";
+  const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.style.display = "none";
+  form.appendChild(imgIn); form.appendChild(fileIn);
+
+  emojiBtn.addEventListener("click", () => {
+    emojiTarget = input;
+    if (emojiPop.classList.contains("show")) return emojiPop.classList.remove("show");
+    const r = emojiBtn.getBoundingClientRect();
+    emojiPop.classList.add("show");
+    emojiPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + "px";
+    emojiPop.style.top = Math.max(8, r.top - emojiPop.offsetHeight - 8) + "px";
+  });
+  imgBtn.addEventListener("click", () => imgIn.click());
+  fileBtn.addEventListener("click", () => fileIn.click());
+
+  imgIn.addEventListener("change", async () => {
+    const f = imgIn.files[0]; imgIn.value = "";
+    if (!f) return;
+    try {
+      let d = await imageToDataURLMax(f, 1000);
+      if (d.length > MAX_DATA_LEN) d = await imageToDataURLMax(f, 640);
+      if (d.length > MAX_DATA_LEN) return alert("Ảnh quá nặng, chọn ảnh khác nhé.");
+      await sendExtra(where, { type: "image", image: d });
+    } catch (e) { alert("Không gửi được ảnh, thử lại nhé."); }
+  });
+  fileIn.addEventListener("change", async () => {
+    const f = fileIn.files[0]; fileIn.value = "";
+    if (!f) return;
+    if (f.size > MAX_FILE_BYTES) return uploadBigFile(f, where);
+    try {
+      const d = await readAsDataURL(f);
+      if (d.length > MAX_DATA_LEN) return alert("Tệp quá nặng, chọn tệp nhỏ hơn nhé.");
+      await sendExtra(where, { type: "file", fileName: f.name, fileSize: f.size, fileData: d });
+    } catch (e) { alert("Không gửi được tệp, thử lại nhé."); }
+  });
+}
+setupComposer("chat-form", "msg-input", "public");
+setupComposer("dm-form", "dm-input", "dm");
+
+/* ---------------- CÀI ĐẶT NHÓM + FILE LỚN ---------------- */
+function chatDocRef() {
+  return (currentChat.type === "group" ? db.collection("groups") : db.collection("chats")).doc(currentChat.id);
+}
+const gsetModal = document.getElementById("gset-modal");
+document.getElementById("dm-group-btn").addEventListener("click", () => {
+  if (!currentChat || currentChat.type !== "group") return;
+  document.getElementById("gset-name").value = currentChat.name || "";
+  setAvatar(document.getElementById("gset-avatar"), currentChat.name, currentChat.photo);
+  gsetModal.classList.add("show");
+});
+document.getElementById("gset-close").addEventListener("click", () => gsetModal.classList.remove("show"));
+document.getElementById("gset-save").addEventListener("click", async () => {
+  const name = document.getElementById("gset-name").value.trim();
+  if (!name) return alert("Tên nhóm không được để trống.");
+  try { await chatDocRef().update({ name: name }); gsetModal.classList.remove("show"); }
+  catch (e) { alert("Không đổi được tên nhóm, kiểm tra lại rules nhé."); }
+});
+document.getElementById("gset-photo").addEventListener("click", () => document.getElementById("gset-input").click());
+document.getElementById("gset-input").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f || !currentChat) return;
+  try {
+    const d = await imageToDataURLMax(f, 256);
+    await chatDocRef().update({ photo: d });
+    setAvatar(document.getElementById("gset-avatar"), currentChat.name, d);
+  } catch (err) { alert("Không đổi được ảnh nhóm lúc này."); }
+});
+document.getElementById("gset-photo-del").addEventListener("click", async () => {
+  try {
+    await chatDocRef().update({ photo: firebase.firestore.FieldValue.delete() });
+    setAvatar(document.getElementById("gset-avatar"), currentChat.name, "");
+  } catch (err) { alert("Không xóa được ảnh nhóm lúc này."); }
+});
+
+// File lớn: đẩy lên Firebase Storage, tin nhắn chỉ lưu link
+const MAX_BIG_BYTES = 500 * 1024 * 1024;
+function uploadBigFile(file, where) {
+  let storage;
+  try { storage = firebase.storage(); } catch (e) { return alert("Chưa bật Firebase Storage cho project này."); }
+  if (file.size > MAX_BIG_BYTES) return alert("Tệp quá lớn, tối đa 500 MB.");
+  const toast = document.getElementById("upload-toast");
+  const safe = file.name.replace(/[^\w.\-]+/g, "_");
+  const ref = storage.ref("uploads/" + currentUser.uid + "/" + Date.now() + "_" + safe);
+  const task = ref.put(file);
+  toast.style.display = "block"; toast.textContent = "Đang tải lên 0%";
+  task.on("state_changed",
+    (sn) => { toast.textContent = "Đang tải lên " + Math.round(sn.bytesTransferred / sn.totalBytes * 100) + "% · " + file.name; },
+    () => { toast.style.display = "none"; alert("Tải tệp lên thất bại. Kiểm tra Storage rules hoặc gói Firebase nhé."); },
+    async () => {
+      try {
+        const url = await ref.getDownloadURL();
+        await sendExtra(where, { type: "file", fileName: file.name, fileSize: file.size, fileURL: url });
+      } catch (e) { alert("Gửi tệp thất bại."); }
+      toast.style.display = "none";
+    });
+}
 </script>
 
 <div id="site-credit">Web được làm bởi @HuuDuong ( vua36)</div>
