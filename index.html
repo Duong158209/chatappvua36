@@ -1170,11 +1170,11 @@ function renderPublic(snap) {
   });
   const last = snap.docs[snap.docs.length - 1];
   const lastIsMine = last && currentUser && last.data().uid === currentUser.uid;
-  if (last && last.data().createdAt && last.data().createdAt.toMillis) {
-    appendSeenAvatars(messagesEl, last.data().createdAt.toMillis(), publicReads);
-  }
+  const ownT = lastOwnTime(snap);
+  if (ownT) appendSeenAvatars(messagesEl, ownT, publicReads);
   if (nearBottom || lastIsMine) messagesEl.scrollTop = messagesEl.scrollHeight;
   updateWorldUnread(snap);
+  if (document.getElementById("panel-chat").classList.contains("active")) bumpReadNow();
 }
 
 function updateWorldUnread(snap) {
@@ -1199,10 +1199,14 @@ let publicReads = {};
 let unsubscribePublicReads = null;
 function listenPublicReads() {
   if (unsubscribePublicReads) return;
-  unsubscribePublicReads = db.collection("meta").doc("public").onSnapshot((d) => {
-    publicReads = (d.exists && d.data() && d.data().reads) || {};
+  const apply = (d) => {
+    const r = (d && d.exists && d.data() && d.data().reads) || {};
+    publicReads = Object.assign({}, publicReads, r);
     if (lastPublicSnap) renderPublic(lastPublicSnap);
-  }, () => {});
+  };
+  const a = db.collection("meta").doc("public").onSnapshot(apply, () => {});
+  const b = db.collection("chats").doc("__world").onSnapshot(apply, () => {});
+  unsubscribePublicReads = () => { try { a(); b(); } catch (e) {} };
 }
 function markWorldRead() {
   if (!currentUser) return;
@@ -1211,6 +1215,7 @@ function markWorldRead() {
   }, { merge: true }).catch(function () {});
   const o = {}; o[currentUser.uid] = firebase.firestore.FieldValue.serverTimestamp();
   db.collection("meta").doc("public").set({ reads: o }, { merge: true }).catch(function () {});
+  db.collection("chats").doc("__world").set({ reads: o }, { merge: true }).catch(function () {});
   const el = document.getElementById("world-unread");
   if (el) el.style.display = "none";
 }
@@ -1219,6 +1224,20 @@ function canShowReader(uid) {
   const d = usersMap[uid] || {};
   if (d.hideSeen && !adminSeeReads()) return false;
   return true;
+}
+function snapTime(data) {
+  return data && data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : 0;
+}
+function lastOwnTime(snap) {
+  if (!snap || !currentUser) return 0;
+  for (let i = snap.docs.length - 1; i >= 0; i--) {
+    const m = snap.docs[i].data();
+    if (m.uid === currentUser.uid && !m.recalled && m.type !== "recalled") {
+      const t = snapTime(m);
+      if (t) return t;
+    }
+  }
+  return 0;
 }
 function appendSeenAvatars(container, lastMs, reads) {
   if (!container || !lastMs) return;
@@ -1229,16 +1248,25 @@ function appendSeenAvatars(container, lastMs, reads) {
     if (!canShowReader(uid)) return;
     const r = reads[uid];
     const ms = r && r.toMillis ? r.toMillis() : 0;
-    if (ms + 800 < lastMs) return;
+    if (!ms || ms + 20000 < lastMs) return;
     const av = document.createElement("div");
     av.className = "mini-seen";
     const u = usersMap[uid] || {};
-    setAvatar(av, u.name || "?", u.photo || "");
-    av.title = u.name || "";
+    setAvatar(av, u.name || uid.slice(0, 1), u.photo || "");
+    av.title = u.name || "Đã xem";
     row.appendChild(av);
     n++;
   });
   if (n) container.appendChild(row);
+}
+let lastReadBump = 0;
+function bumpReadNow() {
+  const now = Date.now();
+  if (now - lastReadBump < 2500) return;
+  lastReadBump = now;
+  if (document.visibilityState !== "visible") return;
+  if (document.getElementById("panel-dm") && document.getElementById("panel-dm").classList.contains("active") && currentChat) markChatRead();
+  if (document.getElementById("panel-chat") && document.getElementById("panel-chat").classList.contains("active")) markWorldRead();
 }
 
 const seenNotify = {};
@@ -2300,10 +2328,10 @@ function renderChatSnap(snap) {
   if (snap.empty) dmEl.innerHTML = '<div class="empty-note">Chưa có tin nhắn nào. Hãy gửi lời chào 👋</div>';
   snap.forEach(doc => renderMessage(doc.data({ serverTimestamps: "estimate" }), doc.metadata.hasPendingWrites, dmEl, true, doc.id, "dm"));
   const last = snap.docs[snap.docs.length - 1];
-  if (last && last.data().createdAt && last.data().createdAt.toMillis) {
-    appendSeenAvatars(dmEl, last.data().createdAt.toMillis(), chatReads);
-  }
+  const ownT = lastOwnTime(snap);
+  if (ownT) appendSeenAvatars(dmEl, ownT, chatReads);
   if (nearBottom || (last && last.data().uid === currentUser.uid)) dmEl.scrollTop = dmEl.scrollHeight;
+  bumpReadNow();
 }
 
 const nickModal = document.getElementById("nick-modal");
