@@ -211,6 +211,9 @@
       <div class="nav-tab active" data-tab="chat">
         <div class="tab-icon">🌐</div><span class="tab-label">Phòng chat chung</span>
       </div>
+      <div class="nav-tab" data-tab="friends">
+        <div class="tab-icon">🧑‍🤝‍🧑</div><span class="tab-label">Bạn bè</span>
+      </div>
       <div class="nav-tab" data-tab="contacts">
         <div class="tab-icon">👥</div><span class="tab-label">Kết bạn</span>
       </div>
@@ -237,13 +240,18 @@
       </form>
     </div>
 
+    <!-- Friends panel -->
+    <div class="panel" id="panel-friends">
+      <div class="panel-header"><div class="title">Bạn bè</div></div>
+      <div id="friends-list" style="flex:1; overflow-y:auto; padding:12px;"></div>
+    </div>
+
     <!-- Contacts panel -->
     <div class="panel" id="panel-contacts">
       <div class="panel-header"><div class="title">Kết bạn</div></div>
       <div class="subtabs">
         <button class="subtab active" data-sub="find">Tìm bạn</button>
         <button class="subtab" data-sub="requests">Lời mời<span class="badge" id="req-badge"></span></button>
-        <button class="subtab" data-sub="friends">Bạn bè</button>
       </div>
       <div id="contacts-list"></div>
     </div>
@@ -427,6 +435,7 @@ document.querySelectorAll(".nav-tab").forEach(tab => {
     tab.classList.add("active");
     document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
     if (tab.dataset.tab === "contacts") loadContacts();
+    if (tab.dataset.tab === "friends") loadFriends();
     if (tab.dataset.tab === "admin") loadAdminList();
   });
 });
@@ -638,18 +647,33 @@ async function loadContacts() {
 
   if (contactsSub === "find") return renderFind(listEl);
 
-  const uids = contactsSub === "requests" ? (contactsMe.requestsReceived || []) : (contactsMe.friends || []);
+  const uids = contactsMe.requestsReceived || [];
   listEl.innerHTML = '<div class="empty-note">Đang tải...</div>';
   const docs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
 
   listEl.innerHTML = "";
   if (docs.length === 0) {
-    listEl.innerHTML = '<div class="empty-note">' + (contactsSub === "requests"
-      ? "Chưa có lời mời kết bạn nào."
-      : "Bạn chưa có bạn bè nào. Qua tab Tìm bạn, nhập ID để kết bạn nhé!") + '</div>';
+    listEl.innerHTML = '<div class="empty-note">Chưa có lời mời kết bạn nào.</div>';
     return;
   }
-  docs.forEach(d => listEl.appendChild(buildContactCard(d, contactsSub === "requests" ? "request" : "friend")));
+  docs.forEach(d => listEl.appendChild(buildContactCard(d, "request")));
+}
+
+async function loadFriends() {
+  const listEl = document.getElementById("friends-list");
+  listEl.innerHTML = '<div class="empty-note">Đang tải...</div>';
+  const meSnap = await db.collection("users").doc(currentUser.uid).get();
+  contactsMe = meSnap.data() || {};
+  updateReqBadge(contactsMe);
+  const uids = contactsMe.friends || [];
+  const docs = (await Promise.all(uids.map(id => db.collection("users").doc(id).get()))).filter(d => d.exists);
+
+  listEl.innerHTML = "";
+  if (docs.length === 0) {
+    listEl.innerHTML = '<div class="empty-note">Bạn chưa có bạn bè nào. Vào mục Kết bạn, nhập ID để tìm nhé!</div>';
+    return;
+  }
+  docs.forEach(d => listEl.appendChild(buildContactCard(d, "friend")));
 }
 
 function renderFind(listEl) {
