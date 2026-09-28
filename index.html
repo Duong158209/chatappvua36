@@ -99,8 +99,8 @@
   .sender-label { font-size: 11px; color: #888; margin: 6px 0 2px 34px; }
 
   #chat-form, #dm-form {
-    display: flex; gap: 6px; align-items: center;
-    padding: 8px 10px;
+    display: flex; gap: 4px; align-items: center;
+    padding: 8px 8px 8px 6px;
     border-top: 1px solid #eee;
     background: #fff;
     flex-shrink: 0;
@@ -109,13 +109,21 @@
     box-sizing: border-box;
     width: 100%;
   }
-  #chat-form input, #dm-form input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #ddd; border-radius: 22px; font-size: 14px; outline: none; }
-  #chat-form button, #dm-form button {
-    background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 50%;
-    width: 36px; height: 36px; font-size: 15px; cursor: pointer; flex-shrink: 0;
+  .composer-field { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }
+  #chat-form input, #dm-form input {
+    width: 100%; min-width: 0; padding: 9px 38px 9px 14px;
+    border: none; background: #f0f2f5; border-radius: 20px; font-size: 15px; outline: none;
   }
-
-  #chat-form button.tool-btn, #dm-form button.tool-btn { background: #f0f0f2; color: #333; font-size: 18px; }
+  #chat-form button, #dm-form button {
+    background: none; color: #ff3b30; border: none; border-radius: 50%;
+    width: 34px; height: 34px; font-size: 20px; cursor: pointer; flex-shrink: 0;
+  }
+  #chat-form button.tool-btn, #dm-form button.tool-btn { background: none; color: #ff3b30; font-size: 20px; }
+  #chat-form button.like-btn, #dm-form button.like-btn { background: none; color: #ff3b30; font-size: 22px; }
+  #chat-form button.send-on, #dm-form button.send-on {
+    background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; font-size: 15px;
+  }
+  .composer-field .emoji-btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; font-size: 18px; color: #ff3b30; }
   #chat-form button.tool-btn.rec-on, #dm-form button.tool-btn.rec-on { background: #e0245e; color: #fff; animation: recpulse 1s infinite; }
   @keyframes recpulse { 50% { opacity: .65; } }
   .voice-box { display: flex; align-items: center; gap: 8px; min-width: 160px; }
@@ -341,10 +349,16 @@
   body.dark .contact-info .cname, body.dark .cinfo .cname { color: #f5f5f7; }
   body.dark .contact-info .cemail, body.dark .cinfo .cemail { color: #d1d1d6; }
   body.dark .empty-note { color: #d1d1d6; }
-  body.dark #chat-form, body.dark #dm-form { background: #111114; border-top-color: #2c2c2e; }
-  body.dark #chat-form input, body.dark #dm-form input, body.dark .friend-search, body.dark .mini-input {
+  body.dark #chat-form, body.dark #dm-form { background: #000; border-top-color: #2c2c2e; }
+  body.dark #chat-form input, body.dark #dm-form input {
+    background: #2c2c2e; color: #f5f5f7;
+  }
+  body.dark .friend-search, body.dark .mini-input {
     background: #1c1c1e; color: #f5f5f7; border-color: #3a3a3c;
   }
+  body.dark #chat-form button.tool-btn, body.dark #dm-form button.tool-btn,
+  body.dark #chat-form button.like-btn, body.dark #dm-form button.like-btn,
+  body.dark .composer-field .emoji-btn { color: #ff3b30; }
   body.dark .friend-search { background: #1c1c1e; color: #f5f5f7; }
   body.dark .modal-box { background: #2c2c2e; color: #f5f5f7; }
   body.dark .modal-box h3 { color: #fff; }
@@ -1447,6 +1461,7 @@ document.getElementById("chat-form").addEventListener("submit", async (e) => {
   const text = input.value.trim();
   if (!text || !currentUser) return;
   input.value = "";
+  input.dispatchEvent(new Event("input"));
   input.focus();
   // Không await: tin hiện ngay trên máy mình (Firestore tự hiển thị bản chờ), gửi lên server chạy ngầm
   db.collection("messages").add({
@@ -1841,17 +1856,17 @@ function listenChatReads() {
     if (lastChatSnap) renderChatSnap(lastChatSnap);
   });
 }
+const localRead = {};
+function readKeyOf(type, id) { return String(type) + ":" + String(id); }
 function markChatRead() {
   if (!currentUser || !currentChat) return;
   const ref = chatParentRef();
   if (!ref) return;
-  if (currentUserData && currentUserData.hideSeen) {
-    /* vẫn đánh dấu đã đọc để xóa badge, không hiện "Đã xem" cho người kia */
-  }
+  const k = readKeyOf(currentChat.type === "group" ? "group" : "dm", currentChat.id);
+  localRead[k] = Date.now() + 5000;
   const o = {}; o[currentUser.uid] = firebase.firestore.FieldValue.serverTimestamp();
   ref.set({ reads: o }, { merge: true }).then(() => {
-    refreshFriendsTabBadge();
-    refreshGroupsTabBadge();
+    setTimeout(function () { refreshFriendsTabBadge(); refreshGroupsTabBadge(); }, 600);
   }).catch(function () {});
 }
 function fmtUnread(n) {
@@ -1877,6 +1892,7 @@ async function refreshFriendsTabBadge() {
   for (let i = 0; i < cachedFriendDocs.length; i++) {
     const id = cachedFriendDocs[i].id;
     const cid = dmChatId(id);
+    if (currentChat && currentChat.type === "dm" && currentChat.id === cid) continue;
     const ms = await lastReadMsOf(db.collection("chats").doc(cid));
     total += await countUnread(db.collection("chats").doc(cid).collection("messages"), ms);
   }
@@ -1889,6 +1905,7 @@ async function refreshGroupsTabBadge() {
     let total = 0;
     const docs = snap.docs;
     for (let i = 0; i < docs.length; i++) {
+      if (currentChat && currentChat.type === "group" && currentChat.id === docs[i].id) continue;
       const ms = await lastReadMsOf(db.collection("groups").doc(docs[i].id));
       total += await countUnread(db.collection("groups").doc(docs[i].id).collection("messages"), ms);
     }
@@ -1899,12 +1916,15 @@ async function countUnread(msgCol, lastReadMs) {
   try {
     const snap = await msgCol.orderBy("createdAt", "desc").limit(99).get();
     let n = 0;
+    const cut = (lastReadMs || 0) + 2000;
     snap.forEach((doc) => {
       const m = doc.data();
       if (!currentUser || m.uid === currentUser.uid) return;
       if (m.recalled || m.type === "recalled") return;
-      const t = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : 0;
-      if (t > (lastReadMs || 0)) n++;
+      if (!m.createdAt || typeof m.createdAt.toMillis !== "function") return;
+      const t = m.createdAt.toMillis();
+      if (t <= (lastReadMs || 0) + 2500) return;
+      n++;
     });
     return n;
   } catch (e) { return 0; }
@@ -1913,7 +1933,12 @@ async function lastReadMsOf(parentRef) {
   try {
     const s = await parentRef.get();
     const r = s.exists && s.data().reads && currentUser ? s.data().reads[currentUser.uid] : null;
-    return r && r.toMillis ? r.toMillis() : 0;
+    let ms = r && r.toMillis ? r.toMillis() : 0;
+    const path = parentRef.path || "";
+    let local = 0;
+    if (path.indexOf("groups/") === 0) local = localRead[readKeyOf("group", parentRef.id)] || 0;
+    else if (path.indexOf("chats/") === 0) local = localRead[readKeyOf("dm", parentRef.id)] || 0;
+    return Math.max(ms, local);
   } catch (e) { return 0; }
 }
 
@@ -2061,6 +2086,7 @@ document.getElementById("dm-form").addEventListener("submit", (e) => {
   const text = input.value.trim();
   if (!text || !currentUser || !currentChat) return;
   input.value = "";
+  input.dispatchEvent(new Event("input"));
   input.focus();
   const msgCol = currentChat.type === "group" ? db.collection("groups").doc(currentChat.id) : db.collection("chats").doc(currentChat.id);
   msgCol.collection("messages").add({
@@ -2500,10 +2526,41 @@ function bindVoiceBtn(btn, where) {
 function setupComposer(formId, inputId, where) {
   const form = document.getElementById(formId), input = document.getElementById(inputId);
   const sendBtn = form.querySelector('button[type="submit"]');
-  const mk = (label, title, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "tool-btn " + (cls || ""); b.textContent = label; b.title = title; form.insertBefore(b, input); return b; };
-  const emojiBtn = mk("😊", "Icon", "emoji-btn"), fileBtn = mk("📎", "Gửi ảnh hoặc tệp"), micBtn = mk("🎤", "Gửi tin thoại");
-  const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.accept = "image/*,*/*"; fileIn.style.display = "none";
-  form.appendChild(fileIn);
+  sendBtn.className = "like-btn";
+  sendBtn.textContent = "👍";
+  sendBtn.title = "Like";
+  const wrap = document.createElement("div");
+  wrap.className = "composer-field";
+  form.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const mk = (label, title, cls) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tool-btn " + (cls || ""); b.textContent = label; b.title = title;
+    form.insertBefore(b, wrap);
+    return b;
+  };
+  const plusBtn = mk("+", "Tệp", ""), camBtn = mk("📷", "Chụp ảnh", ""), galBtn = mk("🖼️", "Thư viện", ""), micBtn = mk("🎙️", "Tin thoại", "");
+  const emojiBtn = document.createElement("button");
+  emojiBtn.type = "button"; emojiBtn.className = "tool-btn emoji-btn"; emojiBtn.textContent = "😊"; emojiBtn.title = "Icon";
+  wrap.appendChild(emojiBtn);
+
+  const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.accept = "*/*"; fileIn.style.display = "none";
+  const camIn = document.createElement("input"); camIn.type = "file"; camIn.accept = "image/*"; camIn.setAttribute("capture", "environment"); camIn.style.display = "none";
+  const galIn = document.createElement("input"); galIn.type = "file"; galIn.accept = "image/*"; galIn.style.display = "none";
+  form.appendChild(fileIn); form.appendChild(camIn); form.appendChild(galIn);
+
+  const syncSend = () => {
+    const has = !!(input.value || "").trim();
+    sendBtn.className = has ? "send-on" : "like-btn";
+    sendBtn.textContent = has ? "➤" : "👍";
+    sendBtn.title = has ? "Gửi" : "Like";
+  };
+  input.addEventListener("input", syncSend);
+  sendBtn.addEventListener("click", (e) => {
+    if ((input.value || "").trim()) return;
+    e.preventDefault();
+    sendExtra(where, { text: "👍" }).catch(() => {});
+  });
 
   emojiBtn.addEventListener("click", () => {
     emojiTarget = input;
@@ -2513,11 +2570,12 @@ function setupComposer(formId, inputId, where) {
     emojiPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + "px";
     emojiPop.style.top = Math.max(8, r.top - emojiPop.offsetHeight - 8) + "px";
   });
-  fileBtn.addEventListener("click", () => fileIn.click());
+  plusBtn.addEventListener("click", () => fileIn.click());
+  camBtn.addEventListener("click", () => camIn.click());
+  galBtn.addEventListener("click", () => galIn.click());
   bindVoiceBtn(micBtn, where);
 
-  fileIn.addEventListener("change", async () => {
-    const f = fileIn.files[0]; fileIn.value = "";
+  const onPick = async (f) => {
     if (!f) return;
     if ((f.type || "").indexOf("image/") === 0) {
       try {
@@ -2534,7 +2592,10 @@ function setupComposer(formId, inputId, where) {
       if (d.length > MAX_DATA_LEN) return alert("Tệp quá nặng, chọn tệp nhỏ hơn nhé.");
       await sendExtra(where, { type: "file", fileName: f.name, fileSize: f.size, fileData: d });
     } catch (e) { alert("Không gửi được tệp, thử lại nhé."); }
-  });
+  };
+  fileIn.addEventListener("change", () => { const f = fileIn.files[0]; fileIn.value = ""; onPick(f); });
+  camIn.addEventListener("change", () => { const f = camIn.files[0]; camIn.value = ""; onPick(f); });
+  galIn.addEventListener("change", () => { const f = galIn.files[0]; galIn.value = ""; onPick(f); });
 }
 setupComposer("chat-form", "msg-input", "public");
 setupComposer("dm-form", "dm-input", "dm");
