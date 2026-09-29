@@ -754,8 +754,9 @@
       <div class="pf-label">Tham gia từ</div>
       <div class="pf-value" id="fp-created">—</div>
     </div>
+    <button class="modal-btn-primary" id="fp-add" style="display:none;">+ Kết bạn</button>
     <button class="modal-btn-primary" id="fp-chat">💬 Trò chuyện</button>
-    <div class="modal-row">
+    <div class="modal-row" id="fp-friend-row">
       <button class="modal-btn-soft" id="fp-unfriend">Hủy kết bạn</button>
       <button class="modal-btn-danger" id="fp-block">🚫 Chặn</button>
     </div>
@@ -2143,6 +2144,10 @@ function buildContactCard(doc, state) {
     btn.addEventListener("click", () => sendRequest(doc.id, btn));
   }
   card.appendChild(btn);
+  avatar.style.cursor = "pointer";
+  avatar.addEventListener("click", (e) => { e.stopPropagation(); openFriendProfile(doc); });
+  info.style.cursor = "pointer";
+  info.addEventListener("click", (e) => { e.stopPropagation(); openFriendProfile(doc); });
   return card;
 }
 
@@ -2181,6 +2186,21 @@ function openFriendProfile(doc) {
   document.getElementById("fp-email-wrap").style.display = isAdmin ? "block" : "none";
   document.getElementById("fp-email").textContent = d.email || "—";
 
+  const myFriends = (currentUserData && currentUserData.friends) || [];
+  const sent = (currentUserData && currentUserData.requestsSent) || [];
+  const isFriend = myFriends.indexOf(doc.id) >= 0;
+  const isSent = sent.indexOf(doc.id) >= 0;
+  document.getElementById("fp-chat").style.display = isFriend ? "block" : "none";
+  document.getElementById("fp-friend-row").style.display = isFriend ? "flex" : "none";
+  const addBtn = document.getElementById("fp-add");
+  if (!isFriend) {
+    addBtn.style.display = "block";
+    addBtn.disabled = isSent;
+    addBtn.textContent = isSent ? "Đã gửi lời mời" : "+ Kết bạn";
+  } else {
+    addBtn.style.display = "none";
+  }
+
   friendModal.classList.add("show");
 }
 document.getElementById("fp-close").addEventListener("click", () => {
@@ -2194,6 +2214,10 @@ document.getElementById("fp-close").addEventListener("click", () => {
 document.getElementById("fp-chat").addEventListener("click", () => {
   friendModal.classList.remove("show");
   if (currentFriend) openDM(currentFriend);
+});
+document.getElementById("fp-add").addEventListener("click", () => {
+  if (!currentFriend) return;
+  sendRequest(currentFriend.uid, document.getElementById("fp-add"));
 });
 
 async function removeRelation(otherUid) {
