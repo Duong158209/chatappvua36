@@ -112,8 +112,9 @@
   .msg-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 6px; }
   .msg-row.me { justify-content: flex-end; }
   .msg-row .mini-avatar {
-    width: 26px; height: 26px; border-radius: 50%; background: #ccd0d5; color: #555;
-    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;
+    width: 36px; height: 36px; border-radius: 50%; background: #ccd0d5; color: #555;
+    display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0;
+    cursor: pointer;
   }
   .bubble { max-width: 65%; padding: 9px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
   .msg-row.other .bubble { background: #e9eaee; color: #050505; }
@@ -1535,6 +1536,8 @@ function renderMessage(m, pending, container, group, msgId, scope) {
     const mini = document.createElement("div");
     mini.className = "mini-avatar";
     setAvatar(mini, dispName, dispPhoto);
+    mini.title = "Xem hồ sơ";
+    mini.addEventListener("click", (ev) => { ev.stopPropagation(); showUserProfile(m.uid); });
     row.appendChild(mini);
   }
 
@@ -2056,6 +2059,19 @@ let sharedNicks = {};     // biệt danh chung của cuộc trò chuyện đang 
 let lastChatSnap = null;
 let unsubscribeGroups = null;
 
+function showUserProfile(uid) {
+  if (!uid) return;
+  if (currentUser && uid === currentUser.uid) {
+    document.getElementById("profile-trigger").click();
+    return;
+  }
+  db.collection("users").doc(uid).get().then((doc) => {
+    if (!doc.exists) return alert("Không tìm thấy hồ sơ.");
+    window._friendBackup = currentFriend;
+    window._chatBackup = currentChat;
+    openFriendProfile(doc);
+  }).catch(() => alert("Không mở được hồ sơ."));
+}
 function openFriendProfile(doc) {
   const d = doc.data();
   const name = d.name || "Ẩn danh";
@@ -2072,7 +2088,14 @@ function openFriendProfile(doc) {
 
   friendModal.classList.add("show");
 }
-document.getElementById("fp-close").addEventListener("click", () => friendModal.classList.remove("show"));
+document.getElementById("fp-close").addEventListener("click", () => {
+  friendModal.classList.remove("show");
+  if (window._chatBackup && window._chatBackup.type === "group") {
+    currentFriend = window._friendBackup;
+    currentChat = window._chatBackup;
+  }
+  window._friendBackup = null; window._chatBackup = null;
+});
 document.getElementById("fp-chat").addEventListener("click", () => {
   friendModal.classList.remove("show");
   if (currentFriend) openDM(currentFriend);
