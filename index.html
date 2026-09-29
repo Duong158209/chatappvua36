@@ -343,9 +343,17 @@
     text-align: center; pointer-events: auto;
     min-width: 0;
   }
+  #app-screen.chat-focus .tg-titlewrap {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
   #app-screen.chat-focus .tg-titlewrap .title {
-    font-size: 16px; font-weight: 700; color: #fff;
+    font-size: 15px; font-weight: 700; color: #fff;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 100%;
+    padding: 5px 16px;
+    border-radius: 16px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.32);
   }
   #app-screen.chat-focus .tg-titlewrap .status {
     font-size: 11px; color: rgba(255,255,255,.72); margin-top: 1px;
