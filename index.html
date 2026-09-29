@@ -388,7 +388,14 @@
     width: 100%; height: 100%; object-fit: cover; border-radius: 14px; background: #222; display: block;
   }
   #call-grid[data-n="1"] { grid-template-columns: 1fr; }
-  #call-grid[data-n="2"] { grid-template-columns: 1fr; }
+  #call-grid[data-n="2"] { display: block; position: relative; }
+  #call-grid[data-n="2"] .cv-box.remote {
+    position: absolute; left: 8px; right: 8px; top: 8px; bottom: 8px;
+  }
+  #call-grid[data-n="2"] #cv-local {
+    position: absolute; right: 14px; bottom: 14px; width: 112px; height: 150px;
+    z-index: 3; box-shadow: 0 4px 16px rgba(0,0,0,.4); border-radius: 12px; overflow: hidden;
+  }
   #call-grid[data-n="3"], #call-grid[data-n="4"] { grid-template-columns: 1fr 1fr; }
   #call-grid[data-n="3"] .cv-box:first-child { grid-column: 1 / -1; }
   #call-grid .cv-box { position: relative; min-height: 0; height: 100%; }
@@ -3346,21 +3353,23 @@ function paintLocalVideo() {
     box.id = "cv-local"; box.className = "cv-box";
     const v = document.createElement("video");
     v.id = "cv-local-v"; v.autoplay = true; v.muted = true; v.playsInline = true;
+    v.setAttribute("playsinline", ""); v.setAttribute("webkit-playsinline", "");
     const n = document.createElement("div"); n.className = "cv-name"; n.textContent = "Bạn";
     box.appendChild(v); box.appendChild(n);
     grid.prepend(box);
   }
   const v = document.getElementById("cv-local-v");
-  if (v && localStream) v.srcObject = localStream;
+  if (v && localStream) { v.srcObject = localStream; v.play().catch(() => {}); }
 }
 
 function remoteBox(uid, name) {
   let box = document.getElementById("cv-" + uid);
   if (box) return box.querySelector("video");
   box = document.createElement("div");
-  box.id = "cv-" + uid; box.className = "cv-box";
+  box.id = "cv-" + uid; box.className = "cv-box remote";
   const v = document.createElement("video");
-  v.autoplay = true; v.playsInline = true;
+  v.autoplay = true; v.playsInline = true; v.muted = false;
+  v.setAttribute("playsinline", ""); v.setAttribute("webkit-playsinline", "");
   const n = document.createElement("div"); n.className = "cv-name"; n.textContent = name || "Khách";
   box.appendChild(v); box.appendChild(n);
   document.getElementById("call-grid").appendChild(box);
@@ -3382,7 +3391,18 @@ async function connectToPeer(callId, otherUid, iOffer) {
   pc.ontrack = (ev) => {
     const name = (usersMap[otherUid] && usersMap[otherUid].name) || "Khách";
     const v = remoteBox(otherUid, name);
-    v.srcObject = ev.streams[0];
+    const stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
+    if (v.srcObject && v.srcObject !== stream && ev.track) {
+      try { v.srcObject.addTrack(ev.track); } catch (e) { v.srcObject = stream; }
+    } else {
+      v.srcObject = stream;
+    }
+    v.muted = false;
+    const tryPlay = () => v.play().catch(() => {});
+    tryPlay();
+    v.onloadedmetadata = tryPlay;
+    callHadPeer = true;
+    layoutCallGrid();
   };
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
