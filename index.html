@@ -742,7 +742,7 @@
       <input type="checkbox" id="set-dark">
     </label>
     <label class="toggle-row">
-      <span><div class="t-title">Tắt thông báo tất cả</div><div class="t-desc">Không kêu / không hiện tin mới</div></span>
+      <span><div class="t-title"><span id="set-mute-all-ico">🔔</span> Tắt thông báo tất cả</div><div class="t-desc">Không kêu / không hiện tin mới</div></span>
       <input type="checkbox" id="set-mute-all">
     </label>
     <div id="admin-set-box" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid #eee;">
@@ -781,8 +781,7 @@
     <button type="button" class="ci-row" id="ci-nick"><span class="ci-ico">Aa</span> Biệt danh</button>
     <button type="button" class="ci-row" id="ci-theme"><span class="ci-ico">🎨</span> Đổi ảnh nền</button>
     <button type="button" class="ci-row" id="ci-members" style="display:none;"><span class="ci-ico">👥</span> Thành viên</button>
-    <button type="button" class="ci-row" id="ci-mute"><span class="ci-ico">🔕</span> <span id="ci-mute-lab">Tắt thông báo đoạn này</span></button>
-    <button type="button" class="ci-row" id="ci-mute-all"><span class="ci-ico">🔇</span> <span id="ci-mute-all-lab">Tắt thông báo tất cả</span></button>
+    <button type="button" class="ci-row" id="ci-mute"><span class="ci-ico" id="ci-mute-ico">🔔</span> <span id="ci-mute-lab">Tắt thông báo đoạn này</span></button>
     <button type="button" class="ci-row" id="ci-leave" style="display:none;color:#ff6b6b;"><span class="ci-ico">🚪</span> Rời nhóm</button>
   </div>
   <div class="ci-card" id="ci-mem-box" style="display:none; margin-top:10px; padding:8px;"></div>
@@ -971,6 +970,8 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   document.getElementById("set-seen").checked = !(currentUserData && currentUserData.hideSeen);
   document.getElementById("set-dark").checked = document.body.classList.contains("dark");
   document.getElementById("set-mute-all").checked = !!(currentUserData && currentUserData.muteAll);
+  const icoA = document.getElementById("set-mute-all-ico");
+  if (icoA) { icoA.textContent = (currentUserData && currentUserData.muteAll) ? "🔕" : "🔔"; icoA.style.color = (currentUserData && currentUserData.muteAll) ? "#ff3b30" : ""; }
   const box = document.getElementById("admin-set-box");
   if (iAmAdmin()) {
     box.style.display = "block";
@@ -998,6 +999,8 @@ document.getElementById("set-mute-all").addEventListener("change", async (e) => 
   if (!currentUser) return;
   await db.collection("users").doc(currentUser.uid).set({ muteAll: !!e.target.checked }, { merge: true });
   if (currentUserData) currentUserData.muteAll = !!e.target.checked;
+  const icoA = document.getElementById("set-mute-all-ico");
+  if (icoA) { icoA.textContent = e.target.checked ? "🔕" : "🔔"; icoA.style.color = e.target.checked ? "#ff3b30" : ""; }
 });
 document.getElementById("set-notify").addEventListener("click", requestNotifyPerm);
 document.getElementById("friend-search").addEventListener("input", paintFriends);
@@ -2208,14 +2211,20 @@ function currentMuteKey() {
   if (!currentChat) return document.getElementById("panel-chat") && document.getElementById("panel-chat").classList.contains("active") ? "public" : "";
   return currentChat.id;
 }
-function refreshMuteLabels() {
+function chatIsMuted() {
   const key = currentMuteKey();
-  const muted = !!(currentUserData && currentUserData.muted && key && currentUserData.muted[key]);
-  const all = !!(currentUserData && currentUserData.muteAll);
+  if (currentUserData && currentUserData.muteAll) return true;
+  return !!(currentUserData && currentUserData.muted && key && currentUserData.muted[key]);
+}
+function refreshMuteLabels() {
+  const muted = chatIsMuted();
   const lab = document.getElementById("ci-mute-lab");
-  const labA = document.getElementById("ci-mute-all-lab");
+  const ico = document.getElementById("ci-mute-ico");
   if (lab) lab.textContent = muted ? "Bật thông báo đoạn này" : "Tắt thông báo đoạn này";
-  if (labA) labA.textContent = all ? "Bật thông báo tất cả" : "Tắt thông báo tất cả";
+  if (ico) {
+    ico.textContent = muted ? "🔕" : "🔔";
+    ico.style.color = muted ? "#ff3b30" : "";
+  }
 }
 ["dm-avatar", "dm-name", "dm-titlewrap"].forEach(id => {
   document.getElementById(id).addEventListener("click", openChatInfo);
@@ -2256,15 +2265,6 @@ document.getElementById("ci-mute").addEventListener("click", async () => {
   if (cur[key]) delete cur[key]; else cur[key] = true;
   await db.collection("users").doc(currentUser.uid).set({ muted: cur }, { merge: true });
   if (currentUserData) currentUserData.muted = cur;
-  refreshMuteLabels();
-});
-document.getElementById("ci-mute-all").addEventListener("click", async () => {
-  if (!currentUser) return;
-  const next = !(currentUserData && currentUserData.muteAll);
-  await db.collection("users").doc(currentUser.uid).set({ muteAll: next }, { merge: true });
-  if (currentUserData) currentUserData.muteAll = next;
-  const cb = document.getElementById("set-mute-all");
-  if (cb) cb.checked = next;
   refreshMuteLabels();
 });
 document.getElementById("ci-leave").addEventListener("click", async () => {
