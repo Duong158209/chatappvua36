@@ -322,13 +322,17 @@
   #app-screen.chat-focus .panel-header {
     padding: 8px 10px;
     height: 56px;
-    background: rgba(20,20,22,.62);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    background: linear-gradient(to bottom, rgba(0,0,0,.28), rgba(0,0,0,.04));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     box-shadow: none;
     border-bottom: none;
-    position: relative;
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    z-index: 40;
   }
+  #app-screen.chat-focus #messages,
+  #app-screen.chat-focus #dm-messages { padding-top: 64px; }
   #app-screen.chat-focus .tg-head { justify-content: space-between; }
   #app-screen.chat-focus .tg-head .back-btn {
     width: 36px; height: 36px; border-radius: 18px;
@@ -403,7 +407,10 @@
   body.dark .sidebar-header { border-bottom-color: #2c2c2e; }
   body.dark .me-text .name, body.dark .nav-tab, body.dark .panel-header .title { color: #f2f2f7; }
   body.dark .me-row { border-bottom-color: #2c2c2e; }
-  body.dark #app-screen.chat-focus .panel-header { background: rgba(20,20,22,.62) !important; box-shadow: none; }
+  body.dark #app-screen.chat-focus .panel-header {
+    background: linear-gradient(to bottom, rgba(0,0,0,.28), rgba(0,0,0,.04)) !important;
+    box-shadow: none;
+  }
   body.dark #dm-name { color: #ffffff !important; opacity: 1; }
   body.dark .back-btn { color: #c8b0ff; }
   body.dark #dm-status { color: #30d158; }
