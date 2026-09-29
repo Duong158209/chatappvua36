@@ -366,11 +366,15 @@
   }
   .call-btn {
     margin-left: auto; margin-right: 8px;
-    width: 40px; height: 40px; border-radius: 20px;
-    border: none; background: rgba(255,255,255,.16); color: #fff;
-    font-size: 18px; cursor: pointer; flex-shrink: 0;
+    width: 42px; height: 42px; border-radius: 21px;
+    border: none; background: #fff; color: #000;
+    cursor: pointer; flex-shrink: 0; z-index: 60; position: relative;
+    display: flex; align-items: center; justify-content: center; padding: 0;
   }
-  #app-screen.chat-focus .call-btn { display: flex; align-items: center; justify-content: center; }
+  .call-btn svg { width: 22px; height: 22px; display: block; fill: #000; }
+  #app-screen.chat-focus .tg-titlewrap { pointer-events: none; z-index: 1; }
+  #app-screen.chat-focus .tg-titlewrap .title,
+  #app-screen.chat-focus .tg-titlewrap .status { pointer-events: auto; }
   #call-overlay {
     display: none; position: fixed; inset: 0; z-index: 9500;
     background: #111; flex-direction: column;
@@ -599,7 +603,9 @@
           <div class="title" id="dm-name">—</div>
           <div class="status" id="dm-status"></div>
         </div>
-        <button type="button" class="call-btn" id="dm-call-btn" title="Gọi video">📹</button>
+        <button type="button" class="call-btn" id="dm-call-btn" title="Gọi">
+          <svg viewBox="0 0 24 24" fill="#000"><path d="M6.6 10.8c1.4 2.7 3.9 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.3 1.1l-2.2 2.2z"/></svg>
+        </button>
         <div class="avatar tg-av" id="dm-avatar">?</div>
         <button class="back-btn" id="dm-group-btn" title="Cài đặt nhóm" style="display:none;">⚙️</button>
         <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh" style="display:none;">✏️</button>
@@ -2348,7 +2354,7 @@ function refreshMuteLabels() {
     ico.style.color = muted ? "#ff3b30" : "";
   }
 }
-["dm-avatar", "dm-name", "dm-titlewrap"].forEach(id => {
+["dm-avatar", "dm-name"].forEach(id => {
   document.getElementById(id).addEventListener("click", openChatInfo);
 });
 document.getElementById("ci-back").addEventListener("click", () => document.getElementById("chat-info").classList.remove("show"));
@@ -3385,7 +3391,10 @@ async function hangupCall(writeEnd) {
   activeCallId = null;
 }
 
-document.getElementById("dm-call-btn").addEventListener("click", startVideoCall);
+document.getElementById("dm-call-btn").addEventListener("click", (e) => {
+  e.preventDefault(); e.stopPropagation();
+  startVideoCall();
+});
 document.getElementById("call-hang").addEventListener("click", () => hangupCall(true));
 document.getElementById("call-mute").addEventListener("click", () => {
   micOn = !micOn;
