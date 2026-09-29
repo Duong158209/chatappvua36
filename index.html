@@ -320,9 +320,36 @@
     z-index: 200; background: #fff;
   }
   #app-screen.chat-focus .panel-header {
-    padding: 10px 12px;
-    background: #fff;
-    box-shadow: 0 1px 0 rgba(0,0,0,.06);
+    padding: 8px 10px;
+    height: 56px;
+    background: rgba(20,20,22,.62);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: none;
+    border-bottom: none;
+    position: relative;
+  }
+  #app-screen.chat-focus .tg-head { justify-content: space-between; }
+  #app-screen.chat-focus .tg-head .back-btn {
+    width: 36px; height: 36px; border-radius: 18px;
+    background: rgba(255,255,255,.14); color: #fff; font-size: 26px; line-height: 34px;
+  }
+  #app-screen.chat-focus .tg-titlewrap {
+    position: absolute; left: 52px; right: 52px;
+    text-align: center; pointer-events: auto;
+    min-width: 0;
+  }
+  #app-screen.chat-focus .tg-titlewrap .title {
+    font-size: 16px; font-weight: 700; color: #fff;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #app-screen.chat-focus .tg-titlewrap .status {
+    font-size: 11px; color: rgba(255,255,255,.72); margin-top: 1px;
+  }
+  #app-screen.chat-focus .tg-av {
+    width: 36px; height: 36px; margin-left: auto;
+    border: 1.5px solid rgba(255,255,255,.28);
+    font-size: 14px;
   }
   .msg-row { position: relative; }
   .msg-row .bubble { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
@@ -376,7 +403,7 @@
   body.dark .sidebar-header { border-bottom-color: #2c2c2e; }
   body.dark .me-text .name, body.dark .nav-tab, body.dark .panel-header .title { color: #f2f2f7; }
   body.dark .me-row { border-bottom-color: #2c2c2e; }
-  body.dark #app-screen.chat-focus .panel-header { background: #111114 !important; box-shadow: 0 1px 0 #2c2c2e; }
+  body.dark #app-screen.chat-focus .panel-header { background: rgba(20,20,22,.62) !important; box-shadow: none; }
   body.dark #dm-name { color: #ffffff !important; opacity: 1; }
   body.dark .back-btn { color: #c8b0ff; }
   body.dark #dm-status { color: #30d158; }
@@ -488,13 +515,13 @@
 
     <!-- Chat panel -->
     <div class="panel active" id="panel-chat">
-      <div class="panel-header">
-        <button class="back-btn" id="chat-back" title="Quay lại">←</button>
-        <div class="avatar">🌐</div>
-        <div>
+      <div class="panel-header tg-head">
+        <button class="back-btn" id="chat-back" title="Quay lại">‹</button>
+        <div class="tg-titlewrap">
           <div class="title">Kênh thế giới</div>
           <div class="status" id="user-count">—</div>
         </div>
+        <div class="avatar tg-av">🌐</div>
       </div>
       <div class="pin-bar" id="world-pin" style="display:none;"></div>
       <div id="messages"></div>
@@ -506,13 +533,13 @@
 
     <!-- DM panel -->
     <div class="panel" id="panel-dm">
-      <div class="panel-header">
-        <button class="back-btn" id="dm-back" title="Quay lại">←</button>
-        <div class="avatar" id="dm-avatar">?</div>
-        <div style="min-width:0;flex:1;">
+      <div class="panel-header tg-head">
+        <button class="back-btn" id="dm-back" title="Quay lại">‹</button>
+        <div class="tg-titlewrap" id="dm-titlewrap">
           <div class="title" id="dm-name">—</div>
           <div class="status" id="dm-status"></div>
         </div>
+        <div class="avatar tg-av" id="dm-avatar">?</div>
         <button class="back-btn" id="dm-group-btn" title="Cài đặt nhóm" style="display:none;">⚙️</button>
         <button class="back-btn" id="dm-nick-btn" title="Đặt biệt danh" style="display:none;">✏️</button>
         <button class="back-btn" id="dm-theme-btn" title="Đổi giao diện đoạn chat" style="display:none;">🎨</button>
@@ -714,6 +741,10 @@
       <span><div class="t-title">Giao diện tối</div><div class="t-desc">Nền tối cho toàn app</div></span>
       <input type="checkbox" id="set-dark">
     </label>
+    <label class="toggle-row">
+      <span><div class="t-title">Tắt thông báo tất cả</div><div class="t-desc">Không kêu / không hiện tin mới</div></span>
+      <input type="checkbox" id="set-mute-all">
+    </label>
     <div id="admin-set-box" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid #eee;">
       <div class="t-title" style="margin-bottom:8px;">Quyền quản trị</div>
       <label class="toggle-row">
@@ -750,6 +781,9 @@
     <button type="button" class="ci-row" id="ci-nick"><span class="ci-ico">Aa</span> Biệt danh</button>
     <button type="button" class="ci-row" id="ci-theme"><span class="ci-ico">🎨</span> Đổi ảnh nền</button>
     <button type="button" class="ci-row" id="ci-members" style="display:none;"><span class="ci-ico">👥</span> Thành viên</button>
+    <button type="button" class="ci-row" id="ci-mute"><span class="ci-ico">🔕</span> <span id="ci-mute-lab">Tắt thông báo đoạn này</span></button>
+    <button type="button" class="ci-row" id="ci-mute-all"><span class="ci-ico">🔇</span> <span id="ci-mute-all-lab">Tắt thông báo tất cả</span></button>
+    <button type="button" class="ci-row" id="ci-leave" style="display:none;color:#ff6b6b;"><span class="ci-ico">🚪</span> Rời nhóm</button>
   </div>
   <div class="ci-card" id="ci-mem-box" style="display:none; margin-top:10px; padding:8px;"></div>
 </div>
@@ -936,6 +970,7 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   document.getElementById("set-activity").checked = !(currentUserData && currentUserData.hideActivity);
   document.getElementById("set-seen").checked = !(currentUserData && currentUserData.hideSeen);
   document.getElementById("set-dark").checked = document.body.classList.contains("dark");
+  document.getElementById("set-mute-all").checked = !!(currentUserData && currentUserData.muteAll);
   const box = document.getElementById("admin-set-box");
   if (iAmAdmin()) {
     box.style.display = "block";
@@ -959,6 +994,11 @@ document.getElementById("set-admin-act").addEventListener("change", async (e) =>
   if (document.getElementById("panel-friends").classList.contains("active")) loadFriends();
 });
 document.getElementById("set-dark").addEventListener("change", (e) => applyTheme(e.target.checked));
+document.getElementById("set-mute-all").addEventListener("change", async (e) => {
+  if (!currentUser) return;
+  await db.collection("users").doc(currentUser.uid).set({ muteAll: !!e.target.checked }, { merge: true });
+  if (currentUserData) currentUserData.muteAll = !!e.target.checked;
+});
 document.getElementById("set-notify").addEventListener("click", requestNotifyPerm);
 document.getElementById("friend-search").addEventListener("input", paintFriends);
 document.getElementById("settings-close").addEventListener("click", () => settingsModal.classList.remove("show"));
@@ -1398,6 +1438,8 @@ function notifyIncoming(id, m, title, chatKey) {
   const ts = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : Date.now();
   if (Date.now() - ts > 30000) return;
   if (viewingChat(chatKey)) return;
+  if (currentUserData && currentUserData.muteAll) return;
+  if (chatKey && currentUserData && currentUserData.muted && currentUserData.muted[chatKey]) return;
   try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
   const body = m.type === "image" ? "Đã gửi một ảnh" : m.type === "voice" ? "Đã gửi tin thoại" : m.type === "file" ? "Đã gửi một tệp" : (m.text || "Tin nhắn mới");
   playNotifySound();
@@ -2157,10 +2199,25 @@ function openChatInfo() {
   document.getElementById("ci-edit-name").style.display = isG ? "block" : "none";
   document.getElementById("ci-name-input").style.display = "none";
   document.getElementById("ci-members").style.display = isG ? "flex" : "none";
+  document.getElementById("ci-leave").style.display = isG ? "flex" : "none";
   document.getElementById("ci-mem-box").style.display = "none";
+  refreshMuteLabels();
   document.getElementById("chat-info").classList.add("show");
 }
-["dm-avatar", "dm-name"].forEach(id => {
+function currentMuteKey() {
+  if (!currentChat) return document.getElementById("panel-chat") && document.getElementById("panel-chat").classList.contains("active") ? "public" : "";
+  return currentChat.id;
+}
+function refreshMuteLabels() {
+  const key = currentMuteKey();
+  const muted = !!(currentUserData && currentUserData.muted && key && currentUserData.muted[key]);
+  const all = !!(currentUserData && currentUserData.muteAll);
+  const lab = document.getElementById("ci-mute-lab");
+  const labA = document.getElementById("ci-mute-all-lab");
+  if (lab) lab.textContent = muted ? "Bật thông báo đoạn này" : "Tắt thông báo đoạn này";
+  if (labA) labA.textContent = all ? "Bật thông báo tất cả" : "Tắt thông báo tất cả";
+}
+["dm-avatar", "dm-name", "dm-titlewrap"].forEach(id => {
   document.getElementById(id).addEventListener("click", openChatInfo);
 });
 document.getElementById("ci-back").addEventListener("click", () => document.getElementById("chat-info").classList.remove("show"));
@@ -2191,6 +2248,37 @@ document.getElementById("ci-name-input").addEventListener("keydown", async (e) =
 });
 document.getElementById("ci-nick").addEventListener("click", () => { document.getElementById("chat-info").classList.remove("show"); document.getElementById("dm-nick-btn").click(); });
 document.getElementById("ci-theme").addEventListener("click", () => { document.getElementById("chat-info").classList.remove("show"); document.getElementById("dm-theme-btn").click(); });
+document.getElementById("ci-mute").addEventListener("click", async () => {
+  if (!currentUser) return;
+  const key = currentMuteKey();
+  if (!key) return;
+  const cur = Object.assign({}, (currentUserData && currentUserData.muted) || {});
+  if (cur[key]) delete cur[key]; else cur[key] = true;
+  await db.collection("users").doc(currentUser.uid).set({ muted: cur }, { merge: true });
+  if (currentUserData) currentUserData.muted = cur;
+  refreshMuteLabels();
+});
+document.getElementById("ci-mute-all").addEventListener("click", async () => {
+  if (!currentUser) return;
+  const next = !(currentUserData && currentUserData.muteAll);
+  await db.collection("users").doc(currentUser.uid).set({ muteAll: next }, { merge: true });
+  if (currentUserData) currentUserData.muteAll = next;
+  const cb = document.getElementById("set-mute-all");
+  if (cb) cb.checked = next;
+  refreshMuteLabels();
+});
+document.getElementById("ci-leave").addEventListener("click", async () => {
+  if (!currentChat || currentChat.type !== "group" || !currentUser) return;
+  if (!confirm("Rời nhóm này?")) return;
+  try {
+    await chatDocRef().update({
+      members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid),
+      admins: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+    });
+    document.getElementById("chat-info").classList.remove("show");
+    document.getElementById("dm-back").click();
+  } catch (e) { alert("Không rời nhóm được."); }
+});
 document.getElementById("ci-members").addEventListener("click", () => {
   const box = document.getElementById("ci-mem-box");
   if (box.style.display === "block") box.style.display = "none";
