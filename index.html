@@ -381,13 +381,17 @@
   }
   #call-overlay.show { display: flex; }
   #call-grid {
-    flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px;
-    align-content: start; overflow: auto;
+    flex: 1; display: grid; gap: 6px; padding: 8px; overflow: hidden; min-height: 0;
+    grid-template-columns: 1fr;
   }
   #call-grid video {
-    width: 100%; height: 42vh; object-fit: cover; border-radius: 14px; background: #222;
+    width: 100%; height: 100%; object-fit: cover; border-radius: 14px; background: #222; display: block;
   }
-  #call-grid .cv-box { position: relative; }
+  #call-grid[data-n="1"] { grid-template-columns: 1fr; }
+  #call-grid[data-n="2"] { grid-template-columns: 1fr; }
+  #call-grid[data-n="3"], #call-grid[data-n="4"] { grid-template-columns: 1fr 1fr; }
+  #call-grid[data-n="3"] .cv-box:first-child { grid-column: 1 / -1; }
+  #call-grid .cv-box { position: relative; min-height: 0; height: 100%; }
   #call-grid .cv-name {
     position: absolute; left: 8px; bottom: 8px; font-size: 12px; color: #fff;
     background: rgba(0,0,0,.45); padding: 2px 8px; border-radius: 8px;
@@ -1621,6 +1625,8 @@ function renderMessage(m, pending, container, group, msgId, scope) {
     im.className = "chat-img"; im.src = m.image; im.alt = "Ảnh";
     im.addEventListener("click", (ev) => { ev.stopPropagation(); document.getElementById("lightbox-img").src = m.image; document.getElementById("lightbox").classList.add("show"); });
     bubble.appendChild(im);
+  } else if (m.type === "call") {
+    bubble.textContent = (m.missed ? "📞 Cuộc gọi nhỡ" : "📞 Cuộc gọi video") + (m.durationText ? " · " + m.durationText : "");
   } else if (m.type === "voice" && (m.fileData || m.fileURL)) {
     const box = document.createElement("div");
     box.className = "voice-box";
@@ -3162,6 +3168,29 @@ let localStream = null;
 let callPcs = {};
 let callUnsubs = [];
 let micOn = true, camOn = true;
+let callStartedAt = 0;
+let callHadPeer = false;
+function layoutCallGrid() {
+  const grid = document.getElementById("call-grid");
+  if (!grid) return;
+  const n = grid.querySelectorAll(".cv-box").length || 1;
+  grid.dataset.n = String(Math.min(n, 4));
+}
+function formatCallDur(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(s / 60), r = s % 60;
+  if (m <= 0) return r + " giây";
+  return m + " phút" + (r ? " " + r + " giây" : "");
+}
+function saveCallHistory(missed, durMs) {
+  if (!currentChat) return;
+  sendExtra("dm", {
+    type: "call",
+    text: missed ? "Cuộc gọi nhỡ" : ("Cuộc gọi video · " + formatCallDur(durMs)),
+    missed: !!missed,
+    durationText: missed ? "" : formatCallDur(durMs)
+  }).catch(() => {});
+}
 
 function callTitle() {
   if (currentChat && currentChat.type === "group") return currentChat.name || "Nhóm";
@@ -3246,7 +3275,12 @@ async function joinCallRoom(callId) {
     return alert("Cần cho phép camera và micro.");
   }
   document.getElementById("call-overlay").classList.add("show");
+  callStartedAt = Date.now();
+  callHadPeer = false;
+  document.getElementById("call-mute").textContent = "🎤";
+  document.getElementById("call-cam").textContent = "📷";
   paintLocalVideo();
+  layoutCallGrid();
   const meRef = db.collection("calls").doc(callId).collection("peers").doc(currentUser.uid);
   await meRef.set({
     uid: currentUser.uid,
@@ -3259,8 +3293,10 @@ async function joinCallRoom(callId) {
     snap.docChanges().forEach((ch) => {
       const uid = ch.doc.id;
       if (uid === currentUser.uid) return;
-      if (ch.type === "removed") return closePeer(uid);
+      if (ch.type === "removed") { closePeer(uid); return; }
+      callHadPeer = true;
       if (!callPcs[uid]) connectToPeer(callId, uid, uid > currentUser.uid);
+      layoutCallGrid();
     });
   });
   const uSig = db.collection("calls").doc(callId).collection("sig")
@@ -3304,6 +3340,7 @@ function remoteBox(uid, name) {
   const n = document.createElement("div"); n.className = "cv-name"; n.textContent = name || "Khách";
   box.appendChild(v); box.appendChild(n);
   document.getElementById("call-grid").appendChild(box);
+  layoutCallGrid();
   return v;
 }
 
@@ -3365,6 +3402,7 @@ function closePeer(uid) {
   if (callPcs[uid]) { try { callPcs[uid].close(); } catch (e) {} delete callPcs[uid]; }
   const box = document.getElementById("cv-" + uid);
   if (box) box.remove();
+  layoutCallGrid();
 }
 
 async function hangupCall(writeEnd) {
@@ -3380,15 +3418,20 @@ async function hangupCall(writeEnd) {
   document.getElementById("call-overlay").classList.remove("show");
   document.getElementById("call-grid").innerHTML = "";
   hideIncoming();
+  const dur = Date.now() - (callStartedAt || Date.now());
+  const missed = !callHadPeer;
   if (id && currentUser) {
     db.collection("calls").doc(id).collection("peers").doc(currentUser.uid).delete().catch(() => {});
     if (writeEnd !== false) {
+      saveCallHistory(missed, dur);
       db.collection("calls").doc(id).collection("peers").get().then((s) => {
         if (s.size <= 1) db.collection("calls").doc(id).set({ status: "ended" }, { merge: true });
       }).catch(() => {});
     }
   }
   activeCallId = null;
+  callStartedAt = 0;
+  callHadPeer = false;
 }
 
 document.getElementById("dm-call-btn").addEventListener("click", (e) => {
