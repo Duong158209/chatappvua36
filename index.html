@@ -1588,17 +1588,37 @@ function renderMessage(m, pending, container, group, msgId, scope) {
     const pq = document.createElement("div"); pq.className = "pq"; pq.textContent = m.pollQ || m.text || "Bỏ phiếu";
     box.appendChild(pq);
     const votes = m.pollVotes || {};
-    const counts = m.pollOpts.map(() => 0);
-    Object.keys(votes).forEach((u) => { const i = votes[u]; if (counts[i] != null) counts[i]++; });
     const total = Object.keys(votes).length;
-    const mine = currentUser ? votes[currentUser.uid] : undefined;
-    m.pollOpts.forEach((opt, idx) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "poll-opt" + (mine === idx ? " picked" : "");
-      b.textContent = opt + "  ·  " + counts[idx] + (total ? (" (" + Math.round(counts[idx] * 100 / total) + "%)") : "");
-      b.addEventListener("click", (ev) => { ev.stopPropagation(); votePoll(scope || (messagesEl.id === "dm-messages" ? "dm" : "public"), msgId, idx); });
-      box.appendChild(b);
+    const sc = scope || (messagesEl.id === "dm-messages" ? "dm" : "public");
+    const open = !!(window.pollOpen && window.pollOpen[msgId]);
+    const hint = document.createElement("div");
+    hint.style.fontSize = "12px"; hint.style.opacity = ".85"; hint.style.marginTop = "4px";
+    hint.textContent = open ? (total + " lượt chọn") : ("Bấm để bình chọn · " + total + " lượt");
+    box.appendChild(hint);
+    if (open) {
+      const counts = m.pollOpts.map(() => 0);
+      Object.keys(votes).forEach((u) => { const i = votes[u]; if (counts[i] != null) counts[i]++; });
+      const mine = currentUser ? votes[currentUser.uid] : undefined;
+      m.pollOpts.forEach((opt, idx) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "poll-opt" + (mine === idx ? " picked" : "");
+        b.textContent = opt + "  ·  " + counts[idx] + (total ? (" (" + Math.round(counts[idx] * 100 / total) + "%)") : "");
+        b.addEventListener("click", (ev) => { ev.stopPropagation(); votePoll(sc, msgId, idx); });
+        box.appendChild(b);
+      });
+      const add = document.createElement("button");
+      add.type = "button"; add.className = "poll-opt";
+      add.textContent = "+ Thêm lựa chọn";
+      add.addEventListener("click", (ev) => { ev.stopPropagation(); addPollOption(sc, msgId); });
+      box.appendChild(add);
+    }
+    bubble.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      window.pollOpen = window.pollOpen || {};
+      window.pollOpen[msgId] = !window.pollOpen[msgId];
+      if (lastChatSnap && messagesEl.id === "dm-messages") renderChatSnap(lastChatSnap);
+      else if (lastPublicSnap && messagesEl.id === "messages") renderPublic(lastPublicSnap);
     });
     bubble.appendChild(box);
   } else {
@@ -2920,6 +2940,18 @@ document.addEventListener("click", (ev) => {
   if (!emojiPop.contains(ev.target) && !ev.target.classList.contains("emoji-btn")) emojiPop.classList.remove("show");
 });
 
+function addPollOption(scope, msgId) {
+  const t = prompt("Thêm lựa chọn:");
+  if (!t || !t.trim()) return;
+  const col = messageColRef(scope === "public" ? "public" : "dm");
+  if (!col) return;
+  col.doc(msgId).get().then((s) => {
+    const opts = (s.data() && s.data().pollOpts) || [];
+    if (opts.length >= 8) return alert("Tối đa 8 lựa chọn.");
+    opts.push(t.trim());
+    return col.doc(msgId).set({ pollOpts: opts }, { merge: true });
+  }).catch(() => alert("Không thêm được lựa chọn."));
+}
 function votePoll(scope, msgId, idx) {
   if (!currentUser || !msgId) return;
   const col = messageColRef(scope === "public" ? "public" : "dm");
