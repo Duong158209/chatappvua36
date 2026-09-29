@@ -322,9 +322,9 @@
   #app-screen.chat-focus .panel-header {
     padding: 8px 10px;
     height: 56px;
-    background: linear-gradient(to bottom, rgba(0,0,0,.28), rgba(0,0,0,.04));
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     box-shadow: none;
     border-bottom: none;
     position: absolute;
@@ -416,7 +416,8 @@
   body.dark .me-text .name, body.dark .nav-tab, body.dark .panel-header .title { color: #f2f2f7; }
   body.dark .me-row { border-bottom-color: #2c2c2e; }
   body.dark #app-screen.chat-focus .panel-header {
-    background: linear-gradient(to bottom, rgba(0,0,0,.28), rgba(0,0,0,.04)) !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
     box-shadow: none;
   }
   body.dark #dm-name { color: #ffffff !important; opacity: 1; }
