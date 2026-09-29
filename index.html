@@ -3191,7 +3191,17 @@ function bindVoiceBtn(btn, where) {
 }
 
 /* ---------------- VIDEO CALL (WebRTC + Firestore) ---------------- */
-const RTC_CFG = { iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }] };
+const RTC_CFG = {
+  iceServers: [
+    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+    {
+      urls: ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443", "turn:openrelay.metered.ca:443?transport=tcp"],
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    }
+  ]
+};
+let iceBuf = {};
 let unsubscribeCalls = null;
 let incomingCallDoc = null;
 let activeCallId = null;
@@ -3381,7 +3391,15 @@ async function connectToPeer(callId, otherUid, iOffer) {
   if (callPcs[otherUid]) return;
   const pc = new RTCPeerConnection(RTC_CFG);
   callPcs[otherUid] = pc;
-  if (localStream) localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+  iceBuf[otherUid] = iceBuf[otherUid] || [];
+  if (localStream) {
+    localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+  } else {
+    try {
+      pc.addTransceiver("audio", { direction: "sendrecv" });
+      pc.addTransceiver("video", { direction: "sendrecv" });
+    } catch (e) {}
+  }
   pc.onicecandidate = (ev) => {
     if (!ev.candidate || !activeCallId) return;
     db.collection("calls").doc(callId).collection("sig").add({
@@ -3391,27 +3409,31 @@ async function connectToPeer(callId, otherUid, iOffer) {
   pc.ontrack = (ev) => {
     const name = (usersMap[otherUid] && usersMap[otherUid].name) || "Khách";
     const v = remoteBox(otherUid, name);
-    const stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
-    if (v.srcObject && v.srcObject !== stream && ev.track) {
-      try { v.srcObject.addTrack(ev.track); } catch (e) { v.srcObject = stream; }
-    } else {
+    let stream = v.srcObject;
+    if (!stream) {
+      stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream();
       v.srcObject = stream;
     }
+    if (ev.track && !stream.getTracks().some((t) => t.id === ev.track.id)) {
+      try { stream.addTrack(ev.track); } catch (e) {}
+    }
     v.muted = false;
-    const tryPlay = () => v.play().catch(() => {});
+    v.volume = 1;
+    const tryPlay = () => { v.muted = false; v.play().catch(() => {}); };
     tryPlay();
     v.onloadedmetadata = tryPlay;
+    setTimeout(tryPlay, 400);
     callHadPeer = true;
     layoutCallGrid();
   };
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-      /* keep tile; ICE may recover */
+    if (pc.connectionState === "failed") {
+      try { pc.restartIce(); } catch (e) {}
     }
   };
   if (iOffer) {
     try {
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
       await pc.setLocalDescription(offer);
       await db.collection("calls").doc(callId).collection("sig").add({
         from: currentUser.uid, to: otherUid, type: "offer", sdp: offer.sdp
@@ -3436,7 +3458,18 @@ async function handleSignal(callId, sig, doc) {
     } else if (sig.type === "answer" && sig.sdp) {
       if (!pc.currentRemoteDescription) await pc.setRemoteDescription({ type: "answer", sdp: sig.sdp });
     } else if (sig.type === "ice" && sig.candidate) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(sig.candidate)); } catch (e) {}
+      if (!pc.remoteDescription) {
+        iceBuf[sig.from] = iceBuf[sig.from] || [];
+        iceBuf[sig.from].push(sig.candidate);
+      } else {
+        try { await pc.addIceCandidate(new RTCIceCandidate(sig.candidate)); } catch (e) {}
+      }
+    }
+    if (pc.remoteDescription && iceBuf[sig.from]) {
+      const buf = iceBuf[sig.from].splice(0);
+      for (let i = 0; i < buf.length; i++) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(buf[i])); } catch (e) {}
+      }
     }
   } catch (e) {}
   if (doc && doc.ref) doc.ref.delete().catch(() => {});
